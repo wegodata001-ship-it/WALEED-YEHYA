@@ -2,6 +2,7 @@
 
 import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
+import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
 import type { ClientRow, DayRow, FarmerRow, FieldTaskRow } from "@/components/dept/types";
 
 export function CustomersRegisterSection({
@@ -149,9 +150,13 @@ export function CustomersCardSection({
                   value: `${t.reportedQuantity ?? "—"} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
                 },
               ]}
-              notes={t.actualNotes}
+              notes={t.employeeNotes || t.actualNotes}
               footer={
-                <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
+                <>
+                  <div className="px-4 pb-2">
+                    <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} />
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
                   <button
                     type="button"
                     onClick={() => onApproveTask(t.id, t.reportedQuantity ?? undefined)}
@@ -175,6 +180,7 @@ export function CustomersCardSection({
                     עדכן ואשר
                   </button>
                 </div>
+                </>
               }
             />
           ))}

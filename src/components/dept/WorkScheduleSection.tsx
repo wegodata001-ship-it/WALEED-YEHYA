@@ -6,7 +6,7 @@ import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { dateRangeQuery, defaultDateRange, type DateRangeState } from "@/lib/dateRange";
 import { TASK_STATUS_LABELS, formatTaskDate, formatTaskTime } from "@/lib/field-task-utils";
-import { MediaGallery } from "@/components/storage/MediaGallery";
+import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
 import type { FieldTaskRow } from "@/components/dept/types";
 
 type Lookup = {
@@ -174,11 +174,9 @@ export function WorkScheduleSection() {
               ]}
               notes={t.employeeNotes || t.managerNotes}
               footer={
-                (t.media?.length || t.photoUrls?.length) ? (
-                  <div className="px-4 pb-3">
-                    <MediaGallery media={t.media} legacyUrls={t.photoUrls} />
-                  </div>
-                ) : undefined
+                <div className="px-4 pb-3">
+                  <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} />
+                </div>
               }
             />
           ))}

@@ -2,6 +2,7 @@
 
 import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
+import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
 import { MediaGallery } from "@/components/storage/MediaGallery";
 import type { FieldTaskRow } from "@/components/dept/types";
 
@@ -101,11 +102,9 @@ export function OpsApprovalsSection({
                 notes={t.employeeNotes || t.actualNotes}
                 footer={
                   <>
-                    {(t.media?.length || t.photoUrls?.length) ? (
-                      <div className="px-4 pb-2">
-                        <MediaGallery media={t.media} legacyUrls={t.photoUrls} />
-                      </div>
-                    ) : null}
+                    <div className="px-4 pb-2">
+                      <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} />
+                    </div>
                     <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
                     <button
                       type="button"
