@@ -1,0 +1,1302 @@
+// =============================================================================
+// Agricultural ERP & CRM — Database Schema
+// Stack: SQLite (dev) / PostgreSQL (production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OWNER
+  OFFICE_MANAGER
+  FIELD_OPERATOR
+  HR_MANAGER
+  WAREHOUSE_MANAGER
+  ACCOUNTANT
+  SUBCONTRACTOR_PORTAL
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  CONFLICT
+  FAILED
+}
+
+enum VehicleType {
+  HARVESTER
+  BALER
+  RAKE
+  COMBINE
+  TRACTOR
+  TRUCK
+  SPRAYER
+  TRAILER
+  FIELD_CART
+  JEEP
+  PRIVATE_CAR
+  OPEN_TRUCK
+  AGENCY_TRAILER
+  DIESEL_TRAILER
+  GREENERY_MOWER
+  OTHER
+}
+
+enum VehicleStatus {
+  ACTIVE
+  IN_MAINTENANCE
+  OUT_OF_SERVICE
+  RETIRED
+}
+
+enum MaterialType {
+  WHEAT
+  CLOVER
+  STRAW
+  BARLEY
+  CORN
+  OTHER
+}
+
+enum BaleCategory {
+  MEDIUM
+  LARGE
+}
+
+enum ChoppingMechanism {
+  NONE
+  CHOPPED
+  UNCHOPPED
+}
+
+enum FuelSourceType {
+  FIXED_TANK
+  FIELD_CART
+  EXTERNAL_STATION
+}
+
+enum FuelTransactionType {
+  REFUEL_VEHICLE
+  TANK_FILL
+  TANK_TRANSFER
+  ADJUSTMENT
+  SUBCONTRACTOR_CHARGE
+}
+
+enum FuelRecipientCategory {
+  TANK
+  COMPANY_VEHICLE
+  COMPANY_EMPLOYEE
+  EXTERNAL_CUSTOMER
+}
+
+enum FuelColumnRole {
+  TANK_FILL
+  TANK_INVENTORY
+  FIELD_CART
+  CONSUMER
+}
+
+enum MachineryUnitType {
+  HARVESTER
+  BALER
+  RAKE
+  COMBINE
+  SUBCONTRACTOR
+}
+
+enum WorkQuantityUnit {
+  DUNAM
+  HOUR
+  BALE
+  ACRE
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  SICK
+  VACATION
+  TRAVEL
+}
+
+enum TimeEntryType {
+  REGULAR
+  OVERTIME
+  TRAVEL
+  HOLIDAY
+  NIGHT_SHIFT
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerCategory {
+  SALARY
+  ADVANCE
+  BONUS
+  DEDUCTION
+  REIMBURSEMENT
+  FUEL_OFFSET
+  JOB_PAYMENT
+  JOB_CHARGE
+  ADJUSTMENT
+  OTHER
+}
+
+enum SubcontractorJobType {
+  SPRAYING
+  FERTILIZING
+  TRANSPORT
+  HARVESTING
+  PLOWING
+  OTHER
+}
+
+enum SubcontractorJobStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  INVOICED
+  SETTLED
+  CANCELLED
+}
+
+enum TirePosition {
+  FRONT_LEFT
+  FRONT_RIGHT
+  REAR_LEFT
+  REAR_RIGHT
+  REAR_INNER_LEFT
+  REAR_INNER_RIGHT
+  SPARE
+}
+
+enum ComplianceType {
+  VEHICLE_TEST
+  INSURANCE
+  LIFTING_INSPECTION
+  LICENSE_RENEWAL
+  REGISTRATION
+}
+
+enum ComplianceStatus {
+  VALID
+  EXPIRING_SOON
+  EXPIRED
+  NOT_APPLICABLE
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum ServiceType {
+  OIL_CHANGE
+  REPAIR
+  INSPECTION
+  TIRE_CHANGE
+  GENERAL_MAINTENANCE
+  BODY_WORK
+  OTHER
+}
+
+enum StockMovementType {
+  PURCHASE
+  USAGE
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+  RETURN
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  CREDIT_NOTE
+}
+
+enum BillingUnit {
+  DUNAM
+  ACRE
+  HOUR
+  BALE
+  TON
+  TRIP
+  FLAT_RATE
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHECK
+  OFFSET
+  CREDIT_CARD
+}
+
+// =============================================================================
+// CORE — Organization, Auth, Sync
+// =============================================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  nameHe    String?  @map("name_he")
+  taxId     String?  @unique @map("tax_id")
+  address   String?
+  phone     String?
+  email     String?
+  vatRate   Decimal  @default(18.00) @map("vat_rate")
+  currency  String   @default("ILS")
+  logoUrl       String?  @map("logo_url")
+  managerPhone  String?  @map("manager_phone")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users              User[]
+  plots              Plot[]
+  moshavim           Moshav[]
+  farmers            Farmer[]
+  vehicles           Vehicle[]
+  employees          Employee[]
+  subcontractors     Subcontractor[]
+  fuelSources             FuelSource[]
+  fuelRecipients          FuelRecipient[]
+  fuelTransactions        FuelTransaction[]
+  inventoryItems          InventoryItem[]
+  warehouses         Warehouse[]
+  falchaRates        FalchaRate[]
+  serviceRecords     ServiceRecord[]
+  machineryWorkLogs       MachineryWorkLog[]
+  machineryUnits          MachineryUnit[]
+  invoices                Invoice[]
+  harvestAccountSummaries HarvestAccountSummary[]
+  communications          CommunicationLog[]
+  fieldTasks              FieldTask[]
+  attendanceRecords       AttendanceRecord[]
+  customerLedgerEntries   CustomerLedgerEntry[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  phone          String?
+  role           UserRole  @default(FIELD_OPERATOR)
+  employeeId     String?   @unique @map("employee_id")
+  isActive       Boolean   @default(true) @map("is_active")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee?    @relation(fields: [employeeId], references: [id])
+
+  machineryWorkLogsCreated MachineryWorkLog[] @relation("MachineryLogCreator")
+  fuelTransactionsCreated  FuelTransaction[]  @relation("FuelTransactionCreator")
+  attendanceRecordsCreated AttendanceRecord[] @relation("AttendanceCreator")
+  fieldTasksCreated        FieldTask[]        @relation("FieldTaskCreator")
+  syncLogs                 SyncLog[]
+  auditLogs                AuditLog[]
+
+  @@index([organizationId])
+  @@index([role])
+  @@unique([phone])
+  @@map("users")
+}
+
+model SyncLog {
+  id             String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  userId         String     @map("user_id")
+  entityType     String     @map("entity_type")
+  entityId       String     @map("entity_id")
+  clientId       String?    @map("client_id")
+  action         String
+  status         SyncStatus @default(PENDING)
+  payload        Json?
+  errorMessage   String?    @map("error_message")
+  syncedAt       DateTime?  @map("synced_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([entityType, entityId])
+  @@index([clientId])
+  @@map("sync_logs")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String?  @map("user_id")
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id")
+  action         String
+  oldValues      Json?    @map("old_values")
+  newValues      Json?    @map("new_values")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// MODULE 1 — Machinery Log (Field Interface)
+// =============================================================================
+
+model Plot {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  nameHe         String?  @map("name_he")
+  code           String?
+  areaAcres      Decimal? @map("area_acres")
+  moshavId       String?  @map("moshav_id")
+  farmerId       String?  @map("farmer_id")
+  gpsCoordinates Json?    @map("gps_coordinates")
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  moshav            Moshav?            @relation(fields: [moshavId], references: [id])
+  farmer            Farmer?            @relation(fields: [farmerId], references: [id])
+  machineryWorkLogs MachineryWorkLog[]
+
+  @@unique([organizationId, name])
+  @@index([moshavId])
+  @@map("plots")
+}
+
+/// יחידת מכונה ביומן העבודה — מקצרת / מכבש / מגוב / קומביין
+model MachineryUnit {
+  id             String            @id @default(cuid())
+  organizationId String            @map("organization_id")
+  name           String
+  unitNumber     String?           @map("unit_number")
+  unitType       MachineryUnitType @map("unit_type")
+  vehicleId      String?           @map("vehicle_id")
+  sortOrder      Int               @default(0) @map("sort_order")
+  headerColor    String?           @map("header_color")
+  isActive       Boolean           @default(true) @map("is_active")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  vehicle      Vehicle?           @relation(fields: [vehicleId], references: [id])
+  workLogs     MachineryWorkLog[]
+  fieldTasks   FieldTask[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, unitType])
+  @@map("machinery_units")
+}
+
+model MachineryWorkLog {
+  id                String            @id @default(cuid())
+  organizationId    String            @map("organization_id")
+  clientId          String?           @map("client_id")
+  machineryUnitId   String?           @map("machinery_unit_id")
+  workDate          DateTime          @map("work_date")
+  operatorId        String?           @map("operator_id")
+  driverName        String?           @map("driver_name")
+  vehicleId         String?           @map("vehicle_id")
+  plotId            String?           @map("plot_id")
+  plotName          String?           @map("plot_name")
+  settlement        String?           @map("settlement")
+  customerName      String?           @map("customer_name")
+  materialType      MaterialType?     @map("material_type")
+  quantityUnit      WorkQuantityUnit  @default(DUNAM) @map("quantity_unit")
+  acresWorked       Decimal           @map("acres_worked")
+  plannedQuantity   Decimal?          @map("planned_quantity")
+  reportedQuantity  Decimal?          @map("reported_quantity")
+  approvalStatus    String            @default("APPROVED") @map("approval_status")
+  baleCategory      BaleCategory?     @map("bale_category")
+  baleCount         Int?              @map("bale_count")
+  choppingMechanism ChoppingMechanism @default(NONE) @map("chopping_mechanism")
+  startTime         DateTime?         @map("start_time")
+  endTime           DateTime?         @map("end_time")
+  notes             String?
+  gpsLat            Float?            @map("gps_lat")
+  gpsLng            Float?            @map("gps_lng")
+  photoUrl          String?           @map("photo_url")
+  whatsappShared    Boolean           @default(false) @map("whatsapp_shared")
+  createdById       String            @map("created_by_id")
+  syncStatus        SyncStatus        @default(PENDING) @map("sync_status")
+  version           Int               @default(1)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  machineryUnit MachineryUnit? @relation(fields: [machineryUnitId], references: [id])
+  operator      Employee?      @relation("MachineryOperator", fields: [operatorId], references: [id])
+  vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id])
+  plot          Plot?          @relation(fields: [plotId], references: [id])
+  createdBy     User           @relation("MachineryLogCreator", fields: [createdById], references: [id])
+
+  @@unique([organizationId, clientId])
+  @@index([workDate])
+  @@index([machineryUnitId])
+  @@index([plotId])
+  @@index([operatorId])
+  @@index([syncStatus])
+  @@map("machinery_work_logs")
+}
+
+// =============================================================================
+// MODULE 2 — Fuel Tracking
+// =============================================================================
+
+model FuelSource {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  name           String
+  sourceType     FuelSourceType @map("source_type")
+  location       String?
+  plotId         String?        @map("plot_id")
+  capacityLiters Decimal?       @map("capacity_liters")
+  currentLevel   Decimal        @default(0) @map("current_level")
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  fuelTransactions FuelTransaction[]
+  fuelRecipients   FuelRecipient[]
+
+  @@index([organizationId, sourceType])
+  @@map("fuel_sources")
+}
+
+/// עמודה בטבלת הדלק הישנה — מיכל / כלי / עובד / לקוח חיצוני
+model FuelRecipient {
+  id              String               @id @default(cuid())
+  organizationId  String               @map("organization_id")
+  name            String
+  nameHe          String?              @map("name_he")
+  category        FuelRecipientCategory
+  columnRole      FuelColumnRole       @map("column_role")
+  sortOrder       Int                  @default(0) @map("sort_order")
+  vehicleId       String?              @map("vehicle_id")
+  employeeId      String?              @map("employee_id")
+  subcontractorId String?              @map("subcontractor_id")
+  fuelSourceId    String?              @map("fuel_source_id")
+  pricePerLiter   Decimal?             @map("price_per_liter")
+  isActive        Boolean              @default(true) @map("is_active")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  vehicle          Vehicle?          @relation(fields: [vehicleId], references: [id])
+  employee         Employee?         @relation(fields: [employeeId], references: [id])
+  subcontractor    Subcontractor?    @relation(fields: [subcontractorId], references: [id])
+  fuelSource       FuelSource?       @relation(fields: [fuelSourceId], references: [id])
+  fuelTransactions FuelTransaction[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, sortOrder])
+  @@index([category])
+  @@map("fuel_recipients")
+}
+
+model FuelTransaction {
+  id              String              @id @default(cuid())
+  organizationId  String              @map("organization_id")
+  clientId        String?             @map("client_id")
+  transactionDate DateTime            @map("transaction_date")
+  sourceId        String?             @map("source_id")
+  recipientId     String?             @map("recipient_id")
+  vehicleId       String?             @map("vehicle_id")
+  licensePlate    String?             @map("license_plate")
+  transactionType FuelTransactionType @map("transaction_type")
+  liters          Decimal
+  pricePerLiter   Decimal?            @map("price_per_liter")
+  totalCost       Decimal?            @map("total_cost")
+  odometerKm      Int?                @map("odometer_km")
+  operatorId      String?             @map("operator_id")
+  subcontractorId String?             @map("subcontractor_id")
+  notes           String?
+  gpsLat          Float?              @map("gps_lat")
+  gpsLng          Float?              @map("gps_lng")
+  photoUrl        String?             @map("photo_url")
+  meterPhotoUrl   String?             @map("meter_photo_url")
+  whatsappShared  Boolean             @default(false) @map("whatsapp_shared")
+  createdById     String              @map("created_by_id")
+  syncStatus      SyncStatus          @default(PENDING) @map("sync_status")
+  version         Int                 @default(1)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  organization  Organization    @relation(fields: [organizationId], references: [id])
+  source        FuelSource?     @relation(fields: [sourceId], references: [id])
+  recipient     FuelRecipient?  @relation(fields: [recipientId], references: [id])
+  vehicle       Vehicle?        @relation(fields: [vehicleId], references: [id])
+  operator      Employee?       @relation("FuelOperator", fields: [operatorId], references: [id])
+  subcontractor Subcontractor?  @relation(fields: [subcontractorId], references: [id])
+  createdBy     User            @relation("FuelTransactionCreator", fields: [createdById], references: [id])
+
+  @@unique([organizationId, clientId])
+  @@index([transactionDate])
+  @@index([recipientId])
+  @@index([vehicleId])
+  @@index([licensePlate])
+  @@index([subcontractorId])
+  @@map("fuel_transactions")
+}
+
+// =============================================================================
+// MODULE 3 — HR Cards (Time & Attendance)
+// =============================================================================
+
+model Employee {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  employeeNumber String?   @map("employee_number")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  idNumber       String?   @map("id_number")
+  phone          String?
+  email          String?
+  position       String?
+  hireDate       DateTime? @map("hire_date")
+  salaryType     String    @default("HOURLY") @map("salary_type")
+  hourlyRate     Decimal?  @map("hourly_rate")
+  monthlySalary  Decimal?  @map("monthly_salary")
+  overtimeRate   Decimal?  @map("overtime_rate")
+  travelRate     Decimal?  @map("travel_rate")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization         Organization       @relation(fields: [organizationId], references: [id])
+  user                 User?
+  attendanceRecords    AttendanceRecord[]
+  ledgerEntries        EmployeeLedgerEntry[]
+  machineryWorkLogs    MachineryWorkLog[]    @relation("MachineryOperator")
+  fuelTransactions     FuelTransaction[]     @relation("FuelOperator")
+  fuelRecipients       FuelRecipient[]
+  fieldTasksAssigned   FieldTask[]           @relation("TaskAssignee")
+
+  @@unique([organizationId, employeeNumber])
+  @@index([organizationId, isActive])
+  @@map("employees")
+}
+
+model AttendanceRecord {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  clientId       String?          @map("client_id")
+  employeeId     String           @map("employee_id")
+  workDate       DateTime         @map("work_date")
+  status         AttendanceStatus @default(PRESENT)
+  checkIn        DateTime?        @map("check_in")
+  checkOut       DateTime?        @map("check_out")
+  taskDescription String?         @map("task_description")
+  plotId         String?          @map("plot_id")
+  notes          String?
+  correctionNote String?          @map("correction_note")
+  approvalStatus String           @default("APPROVED") @map("approval_status")
+  gpsLat         Float?           @map("gps_lat")
+  gpsLng         Float?           @map("gps_lng")
+  photoUrl       String?          @map("photo_url")
+  createdById    String           @map("created_by_id")
+  syncStatus     SyncStatus       @default(PENDING) @map("sync_status")
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  createdBy   User        @relation("AttendanceCreator", fields: [createdById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  timeEntries TimeEntry[]
+
+  @@unique([organizationId, clientId])
+  @@index([employeeId, workDate])
+  @@index([workDate])
+  @@map("attendance_records")
+}
+
+/// משימה שהמנהל רושם לעובד שטח — העובד רק מסמן השלמה ומה בוצע בפועל
+model FieldTask {
+  id               String           @id @default(cuid())
+  organizationId   String           @map("organization_id")
+  assigneeId       String           @map("assignee_id")
+  workDate         DateTime         @map("work_date")
+  machineryUnitId  String?          @map("machinery_unit_id")
+  settlement       String?
+  customerName     String?          @map("customer_name")
+  plotName         String?          @map("plot_name")
+  plannedQuantity  Decimal          @map("planned_quantity")
+  reportedQuantity Decimal?         @map("reported_quantity")
+  quantityUnit     WorkQuantityUnit @default(DUNAM) @map("quantity_unit")
+  taskDescription  String?          @map("task_description")
+  actualNotes      String?          @map("actual_notes")
+  status           String           @default("ASSIGNED")
+  approvalStatus   String           @default("PENDING") @map("approval_status")
+  completedAt      DateTime?        @map("completed_at")
+  createdById      String           @map("created_by_id")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  assignee      Employee       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  machineryUnit MachineryUnit? @relation(fields: [machineryUnitId], references: [id])
+  createdBy     User           @relation("FieldTaskCreator", fields: [createdById], references: [id])
+
+  @@index([assigneeId, workDate])
+  @@index([organizationId, workDate])
+  @@index([status])
+  @@map("field_tasks")
+}
+
+model TimeEntry {
+  id                 String        @id @default(cuid())
+  attendanceRecordId String        @map("attendance_record_id")
+  entryType          TimeEntryType @map("entry_type")
+  hours              Decimal      
+  rate               Decimal?     
+  amount             Decimal?     
+  description        String?
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  attendanceRecord AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceRecordId])
+  @@map("time_entries")
+}
+
+model EmployeeLedgerEntry {
+  id          String         @id @default(cuid())
+  employeeId  String         @map("employee_id")
+  entryDate   DateTime       @map("entry_date")
+  entryType   LedgerEntryType @map("entry_type")
+  category    LedgerCategory
+  amount      Decimal       
+  description String
+  referenceId String?        @map("reference_id")
+  referenceType String?      @map("reference_type")
+  balanceAfter Decimal?      @map("balance_after")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, entryDate])
+  @@map("employee_ledger_entries")
+}
+
+// =============================================================================
+// MODULE 4 — Subcontractors
+// =============================================================================
+
+model Subcontractor {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  contactPerson  String?  @map("contact_person")
+  phone          String?
+  email          String?
+  taxId          String?  @map("tax_id")
+  address        String?
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization  Organization                @relation(fields: [organizationId], references: [id])
+  fuelTransactions FuelTransaction[]
+  fuelRecipients   FuelRecipient[]
+  jobs          SubcontractorJob[]
+  ledgerEntries SubcontractorLedgerEntry[]
+  settlements   SubcontractorSettlement[]
+
+  @@index([organizationId])
+  @@map("subcontractors")
+}
+
+model SubcontractorJob {
+  id              String                 @id @default(cuid())
+  organizationId  String                 @map("organization_id")
+  clientId        String?                @map("client_id")
+  subcontractorId String               @map("subcontractor_id")
+  jobType         SubcontractorJobType   @map("job_type")
+  status          SubcontractorJobStatus @default(PLANNED)
+  jobDate         DateTime               @map("job_date")
+  plotId          String?                @map("plot_id")
+  description     String?
+  acres           Decimal?              
+  hours           Decimal?              
+  agreedRate      Decimal?               @map("agreed_rate")
+  totalAmount     Decimal?               @map("total_amount")
+  isChargeToUs    Boolean                @default(false) @map("is_charge_to_us")
+  notes           String?
+  syncStatus      SyncStatus             @default(PENDING) @map("sync_status")
+  version         Int                    @default(1)
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  subcontractor Subcontractor @relation(fields: [subcontractorId], references: [id])
+
+  @@unique([organizationId, clientId])
+  @@index([subcontractorId, jobDate])
+  @@index([status])
+  @@map("subcontractor_jobs")
+}
+
+model SubcontractorLedgerEntry {
+  id              String          @id @default(cuid())
+  subcontractorId String        @map("subcontractor_id")
+  entryDate       DateTime        @map("entry_date")
+  entryType       LedgerEntryType @map("entry_type")
+  category        LedgerCategory
+  amount          Decimal        
+  description     String
+  referenceId     String?         @map("reference_id")
+  referenceType   String?         @map("reference_type")
+  isOffset        Boolean         @default(false) @map("is_offset")
+  offsetAgainstId String?         @map("offset_against_id")
+  balanceAfter    Decimal?        @map("balance_after")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  subcontractor   Subcontractor              @relation(fields: [subcontractorId], references: [id])
+  offsetAgainst   SubcontractorLedgerEntry?  @relation("LedgerOffset", fields: [offsetAgainstId], references: [id])
+  offsetEntries   SubcontractorLedgerEntry[] @relation("LedgerOffset")
+
+  @@index([subcontractorId, entryDate])
+  @@map("subcontractor_ledger_entries")
+}
+
+model SubcontractorSettlement {
+  id              String   @id @default(cuid())
+  subcontractorId String   @map("subcontractor_id")
+  periodStart     DateTime @map("period_start")
+  periodEnd       DateTime @map("period_end")
+  totalCharges    Decimal  @map("total_charges")
+  totalPayments   Decimal  @map("total_payments")
+  fuelOffsets     Decimal  @default(0) @map("fuel_offsets")
+  jobOffsets      Decimal  @default(0) @map("job_offsets")
+  netAmount       Decimal  @map("net_amount")
+  netDirection    String   @map("net_direction")
+  notes           String?
+  generatedAt     DateTime @default(now()) @map("generated_at")
+
+  subcontractor Subcontractor @relation(fields: [subcontractorId], references: [id])
+
+  @@index([subcontractorId, periodStart])
+  @@map("subcontractor_settlements")
+}
+
+// =============================================================================
+// MODULE 5 — Tire & Fleet Lifecycle
+// =============================================================================
+
+model Vehicle {
+  id                      String        @id @default(cuid())
+  organizationId          String        @map("organization_id")
+  licensePlate            String        @map("license_plate")
+  vehicleType             VehicleType   @map("vehicle_type")
+  status                  VehicleStatus @default(ACTIVE)
+  make                    String?
+  model                   String?
+  year                    Int?
+  vin                     String?
+  odometerKm              Int?          @map("odometer_km")
+  fuelTankCapacity        Decimal?      @map("fuel_tank_capacity")
+  testExpiryDate          DateTime?     @map("test_expiry_date")
+  liftingInspectionExpiry DateTime?     @map("lifting_inspection_expiry")
+  compulsoryInsurance     Decimal?      @map("compulsory_insurance")
+  thirdPartyInsurance     Decimal?      @map("third_party_insurance")
+  insuranceValidUntil     DateTime?     @map("insurance_valid_until")
+  towingValidUntil        DateTime?     @map("towing_valid_until")
+  windshieldInsurance     Decimal?      @map("windshield_insurance")
+  registeredTo            String?       @map("registered_to")
+  agentPhone              String?       @map("agent_phone")
+  notes                   String?
+  isActive                Boolean       @default(true) @map("is_active")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  organization      Organization         @relation(fields: [organizationId], references: [id])
+  tires             Tire[]
+  complianceRecords VehicleCompliance[]
+  machineryWorkLogs MachineryWorkLog[]
+  machineryUnits    MachineryUnit[]
+  fuelTransactions  FuelTransaction[]
+  fuelRecipients    FuelRecipient[]
+  serviceRecords    ServiceRecord[]
+
+  @@unique([organizationId, licensePlate])
+  @@index([vehicleType])
+  @@map("vehicles")
+}
+
+model Tire {
+  id           String       @id @default(cuid())
+  vehicleId    String       @map("vehicle_id")
+  position     TirePosition
+  brand        String
+  size         String
+  depthMm      Decimal?     @map("depth_mm")
+  installedAt  DateTime?    @map("installed_at")
+  replacedAt   DateTime?    @map("replaced_at")
+  purchaseCost Decimal?     @map("purchase_cost")
+  isActive     Boolean      @default(true) @map("is_active")
+  notes        String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@index([vehicleId, isActive])
+  @@map("tires")
+}
+
+model VehicleCompliance {
+  id           String           @id @default(cuid())
+  vehicleId    String           @map("vehicle_id")
+  type         ComplianceType
+  status       ComplianceStatus @default(VALID)
+  issueDate    DateTime?        @map("issue_date")
+  expiryDate   DateTime         @map("expiry_date")
+  documentUrl  String?          @map("document_url")
+  provider     String?
+  policyNumber String?          @map("policy_number")
+  cost         Decimal?        
+  notes        String?
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  vehicle Vehicle        @relation(fields: [vehicleId], references: [id])
+  alerts  SystemAlert[]
+
+  @@index([vehicleId, type])
+  @@index([expiryDate])
+  @@map("vehicle_compliance")
+}
+
+model SystemAlert {
+  id                  String        @id @default(cuid())
+  organizationId      String        @map("organization_id")
+  severity            AlertSeverity @default(WARNING)
+  title               String
+  message             String
+  entityType          String        @map("entity_type")
+  entityId            String        @map("entity_id")
+  vehicleComplianceId String?       @map("vehicle_compliance_id")
+  inventoryItemId     String?       @map("inventory_item_id")
+  isRead              Boolean       @default(false) @map("is_read")
+  isDismissed         Boolean       @default(false) @map("is_dismissed")
+  triggeredAt         DateTime      @default(now()) @map("triggered_at")
+  expiresAt           DateTime?     @map("expires_at")
+
+  vehicleCompliance VehicleCompliance? @relation(fields: [vehicleComplianceId], references: [id])
+  inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([organizationId, isDismissed])
+  @@index([triggeredAt])
+  @@map("system_alerts")
+}
+
+// =============================================================================
+// MODULE 6 — Inventory & Service Book (Digital Garage)
+// =============================================================================
+
+model Warehouse {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  location       String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  stockLevels    StockLevel[]
+  stockMovements StockMovement[]
+
+  @@map("warehouses")
+}
+
+model InventoryItem {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  sku            String?
+  name           String
+  nameHe         String?  @map("name_he")
+  category       String
+  unit           String
+  minStockLevel  Decimal  @default(0) @map("min_stock_level")
+  unitCost       Decimal? @map("unit_cost")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  stockLevels        StockLevel[]
+  stockMovements     StockMovement[]
+  serviceLineItems   ServiceLineItem[]
+  systemAlerts       SystemAlert[]
+
+  @@unique([organizationId, sku])
+  @@index([category])
+  @@map("inventory_items")
+}
+
+model StockLevel {
+  id              String  @id @default(cuid())
+  warehouseId     String  @map("warehouse_id")
+  inventoryItemId String  @map("inventory_item_id")
+  quantity        Decimal @default(0)
+
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@unique([warehouseId, inventoryItemId])
+  @@map("stock_levels")
+}
+
+model StockMovement {
+  id              String            @id @default(cuid())
+  warehouseId     String            @map("warehouse_id")
+  inventoryItemId String            @map("inventory_item_id")
+  movementType    StockMovementType @map("movement_type")
+  quantity        Decimal          
+  unitCost        Decimal?          @map("unit_cost")
+  referenceId     String?           @map("reference_id")
+  referenceType   String?           @map("reference_type")
+  notes           String?
+  movementDate    DateTime          @default(now()) @map("movement_date")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([movementDate])
+  @@index([inventoryItemId])
+  @@map("stock_movements")
+}
+
+model ServiceRecord {
+  id             String      @id @default(cuid())
+  organizationId String      @map("organization_id")
+  vehicleId      String      @map("vehicle_id")
+  serviceType    ServiceType @map("service_type")
+  serviceDate    DateTime    @map("service_date")
+  odometerKm     Int?        @map("odometer_km")
+  description    String?
+  laborCost      Decimal?    @map("labor_cost")
+  partsCost      Decimal?    @map("parts_cost")
+  totalCost      Decimal?    @map("total_cost")
+  performedBy    String?     @map("performed_by")
+  nextServiceKm  Int?        @map("next_service_km")
+  nextServiceDate DateTime?  @map("next_service_date")
+  notes          String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  vehicle      Vehicle           @relation(fields: [vehicleId], references: [id])
+  lineItems    ServiceLineItem[]
+
+  @@index([vehicleId, serviceDate])
+  @@map("service_records")
+}
+
+model ServiceLineItem {
+  id              String  @id @default(cuid())
+  serviceRecordId String  @map("service_record_id")
+  inventoryItemId String? @map("inventory_item_id")
+  description     String
+  quantity        Decimal
+  unitCost        Decimal @map("unit_cost")
+  totalCost       Decimal @map("total_cost")
+
+  serviceRecord ServiceRecord  @relation(fields: [serviceRecordId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([serviceRecordId])
+  @@map("service_line_items")
+}
+
+// =============================================================================
+// MODULE 7 — CRM & Billing
+// =============================================================================
+
+model Moshav {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  nameHe         String?  @map("name_he")
+  region         String?
+  contactPhone   String?  @map("contact_phone")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization           Organization           @relation(fields: [organizationId], references: [id])
+  farmers                Farmer[]
+  plots                  Plot[]
+  harvestAccountSummaries HarvestAccountSummary[]
+
+  @@unique([organizationId, name])
+  @@map("moshavim")
+}
+
+model Farmer {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  moshavId       String?  @map("moshav_id")
+  firstName      String   @map("first_name")
+  lastName       String   @map("last_name")
+  idNumber       String?  @map("id_number")
+  phone          String?
+  email          String?
+  address        String?
+  taxId          String?  @map("tax_id")
+  notes          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization            Organization            @relation(fields: [organizationId], references: [id])
+  moshav                  Moshav?                 @relation(fields: [moshavId], references: [id])
+  plots                   Plot[]
+  invoices                Invoice[]
+  harvestAccountSummaries HarvestAccountSummary[]
+  ledgerEntries           CustomerLedgerEntry[]
+
+  @@index([moshavId])
+  @@index([organizationId])
+  @@map("farmers")
+}
+
+/// תנועות כספיות מול לקוח שדה (תשלום / תקבול / מפרעה)
+model CustomerLedgerEntry {
+  id             String          @id @default(cuid())
+  organizationId String          @map("organization_id")
+  farmerId       String?         @map("farmer_id")
+  customerName   String          @map("customer_name")
+  entryDate      DateTime        @map("entry_date")
+  entryType      LedgerEntryType @map("entry_type")
+  category       LedgerCategory
+  amount         Decimal
+  description    String
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  farmer       Farmer?      @relation(fields: [farmerId], references: [id])
+
+  @@index([organizationId, entryDate])
+  @@index([customerName])
+  @@map("customer_ledger_entries")
+}
+
+model FalchaRate {
+  id             String      @id @default(cuid())
+  organizationId String      @map("organization_id")
+  serviceName    String      @map("service_name")
+  serviceNameHe  String?     @map("service_name_he")
+  materialType   MaterialType? @map("material_type")
+  unit           BillingUnit
+  unitPrice      Decimal     @map("unit_price")
+  defaultQuantity Decimal?   @map("default_quantity")
+  effectiveFrom  DateTime    @map("effective_from")
+  effectiveTo    DateTime?   @map("effective_to")
+  isActive       Boolean     @default(true) @map("is_active")
+  notes          String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  organization      Organization      @relation(fields: [organizationId], references: [id])
+  invoiceLineItems  InvoiceLineItem[]
+
+  @@index([organizationId, isActive])
+  @@index([effectiveFrom])
+  @@map("falcha_rates")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  invoiceNumber  String        @map("invoice_number")
+  farmerId       String        @map("farmer_id")
+  moshavId       String?       @map("moshav_id")
+  status         InvoiceStatus @default(DRAFT)
+  issueDate      DateTime      @map("issue_date")
+  dueDate        DateTime?     @map("due_date")
+  seasonYear     Int?          @map("season_year")
+  subtotal       Decimal       @default(0)
+  taxAmount      Decimal       @default(0) @map("tax_amount")
+  vatRate        Decimal       @default(18.00) @map("vat_rate")
+  vatAmount      Decimal       @default(0) @map("vat_amount")
+  totalAmount    Decimal       @default(0) @map("total_amount")
+  amountPaid     Decimal       @default(0) @map("amount_paid")
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  farmer       Farmer        @relation(fields: [farmerId], references: [id])
+  lineItems    InvoiceLineItem[]
+  taxComponents InvoiceTaxComponent[]
+  payments     Payment[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([farmerId])
+  @@index([status])
+  @@index([issueDate])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id           String      @id @default(cuid())
+  invoiceId    String      @map("invoice_id")
+  falchaRateId String?     @map("falcha_rate_id")
+  description  String
+  unit         BillingUnit
+  quantity     Decimal    
+  unitPrice    Decimal     @map("unit_price")
+  lineTotal    Decimal     @map("line_total")
+  plotId       String?     @map("plot_id")
+  materialType MaterialType? @map("material_type")
+  sortOrder    Int         @default(0) @map("sort_order")
+
+  invoice    Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  falchaRate FalchaRate? @relation(fields: [falchaRateId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+model InvoiceTaxComponent {
+  id          String  @id @default(cuid())
+  invoiceId   String  @map("invoice_id")
+  name        String
+  rate        Decimal
+  baseAmount  Decimal @map("base_amount")
+  taxAmount   Decimal @map("tax_amount")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_tax_components")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  invoiceId     String        @map("invoice_id")
+  paymentDate   DateTime      @map("payment_date")
+  amount        Decimal      
+  method        PaymentMethod
+  referenceNumber String?     @map("reference_number")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([paymentDate])
+  @@map("payments")
+}
+
+model HarvestAccountSummary {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  farmerId       String   @map("farmer_id")
+  moshavId       String   @map("moshav_id")
+  seasonYear     Int      @map("season_year")
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  totalAcres     Decimal  @map("total_acres")
+  totalBales     Int?     @map("total_bales")
+  grossAmount    Decimal  @map("gross_amount")
+  deductions     Decimal  @default(0)
+  netAmount      Decimal  @map("net_amount")
+  vatAmount      Decimal  @map("vat_amount")
+  totalWithVat   Decimal  @map("total_with_vat")
+  amountCollected Decimal @default(0) @map("amount_collected")
+  balanceDue     Decimal  @map("balance_due")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  notes          String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  farmer       Farmer       @relation(fields: [farmerId], references: [id])
+  moshav       Moshav       @relation(fields: [moshavId], references: [id])
+
+  @@unique([farmerId, moshavId, seasonYear, periodStart])
+  @@index([seasonYear])
+  @@map("harvest_account_summaries")
+}
+
+// =============================================================================
+// COMMUNICATIONS — WhatsApp, SMS, Alerts
+// =============================================================================
+
+enum CommunicationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum CommunicationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+model CommunicationLog {
+  id             String               @id @default(cuid())
+  organizationId String               @map("organization_id")
+  channel        CommunicationChannel @default(WHATSAPP)
+  recipientPhone String               @map("recipient_phone")
+  recipientName  String?              @map("recipient_name")
+  message        String
+  entityType     String?              @map("entity_type")
+  entityId       String?              @map("entity_id")
+  status         CommunicationStatus  @default(SENT)
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("communication_logs")
+}

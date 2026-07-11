@@ -1,0 +1,12 @@
+{
+  "name": "WALLED YEHYA GROUP ERP",
+  "short_name": "Walled Yehya",
+  "description": "מערכת ניהול חקלאית — יומן עבודה, דלק ונוכחות",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#14532d",
+  "theme_color": "#166534",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "he"
+}
