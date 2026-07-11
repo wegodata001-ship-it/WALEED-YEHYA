@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg, getCurrentUser } from "@/lib/org";
+import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireManager();
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
   const unitId = searchParams.get("unitId");
@@ -37,15 +40,19 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(logs);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuthUser();
     const body = await req.json();
     const org = await getDefaultOrg();
     const user = await getCurrentUser();
 
-    let unit = body.machineryUnitId
+    const unit = body.machineryUnitId
       ? await prisma.machineryUnit.findUnique({
           where: { id: body.machineryUnitId },
           include: { vehicle: true },
@@ -97,6 +104,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(log, { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בשמירת יומן מכונה" }, { status: 500 });
   }

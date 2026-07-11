@@ -1,17 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Camera, Loader2, X } from "lucide-react";
+import { isStoragePath } from "@/lib/storage/paths";
 
 type PhotoCaptureProps = {
   onCapture: (url: string) => void;
   photoUrl?: string | null;
   label?: string;
   hint?: string;
+  module?: string;
+  entityId?: string;
 };
 
-export function PhotoCapture({ onCapture, photoUrl, label = "צילום הוכחה", hint = "לחץ לצילום / העלאה" }: PhotoCaptureProps) {
+export function PhotoCapture({
+  onCapture,
+  photoUrl,
+  label = "צילום הוכחה",
+  hint = "לחץ לצילום / העלאה",
+  module = "machinery",
+  entityId,
+}: PhotoCaptureProps) {
   const [uploading, setUploading] = useState(false);
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photoUrl) {
+      setDisplayUrl(null);
+      return;
+    }
+    if (!isStoragePath(photoUrl)) {
+      setDisplayUrl(photoUrl);
+      return;
+    }
+    fetch("/api/storage/signed-urls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: [photoUrl] }),
+    })
+      .then((r) => r.json())
+      .then((d) => setDisplayUrl(d.urls?.[photoUrl] || null))
+      .catch(() => setDisplayUrl(null));
+  }, [photoUrl]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -20,9 +50,15 @@ export function PhotoCapture({ onCapture, photoUrl, label = "צילום הוכח
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("module", module);
+      if (entityId) form.append("entityId", entityId);
       const res = await fetch("/api/upload", { method: "POST", body: form });
       const data = await res.json();
-      if (data.url) onCapture(data.url);
+      if (data.path || data.url) {
+        const path = data.path || data.url;
+        onCapture(path);
+        setDisplayUrl(data.previewUrl || URL.createObjectURL(file));
+      }
     } finally {
       setUploading(false);
     }
@@ -34,12 +70,15 @@ export function PhotoCapture({ onCapture, photoUrl, label = "צילום הוכח
         <Camera className="h-4 w-4 text-primary" />
         {label}
       </div>
-      {photoUrl ? (
+      {displayUrl ? (
         <div className="relative">
-          <img src={photoUrl} alt="הוכחה" className="w-full h-32 object-cover rounded-lg" />
+          <img src={displayUrl} alt="הוכחה" className="w-full h-32 object-cover rounded-lg" />
           <button
             type="button"
-            onClick={() => onCapture("")}
+            onClick={() => {
+              onCapture("");
+              setDisplayUrl(null);
+            }}
             className="absolute top-1 left-1 bg-black/50 text-white rounded-full p-1"
           >
             <X className="h-4 w-4" />

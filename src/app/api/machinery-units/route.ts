@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { MachineryUnitType } from "@prisma/client";
+import { handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 
 export async function GET() {
+  try {
+    await requireManager();
   const org = await getDefaultOrg();
   const units = await prisma.machineryUnit.findMany({
     where: { organizationId: org.id, isActive: true },
@@ -18,10 +21,14 @@ export async function GET() {
     },
   });
   return NextResponse.json(units);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuthUser();
     const org = await getDefaultOrg();
     const body = await req.json();
     const name = String(body.name || "").trim();

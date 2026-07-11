@@ -24,7 +24,10 @@ export function OperationsDeptClient() {
   const [fuelPrices, setFuelPrices] = useState<{ id: string; name: string; pricePerLiter: number | null }[]>([]);
   const [tasks, setTasks] = useState<FieldTaskRow[]>([]);
   const [pendingAttendance, setPendingAttendance] = useState<
-    { id: string; employee: { firstName: string; lastName: string }; correctionNote: string | null; workDate: string }[]
+    { id: string; employee: { firstName: string; lastName: string }; correctionNote: string | null; workDate: string; photoUrl?: string | null }[]
+  >([]);
+  const [verifiedAttendance, setVerifiedAttendance] = useState<
+    { id: string; employee: { firstName: string; lastName: string }; workDate: string; checkIn: string | null; photoUrl: string | null }[]
   >([]);
   const [adjustQty, setAdjustQty] = useState<Record<string, string>>({});
   const [editingFuel, setEditingFuel] = useState<FuelTx | null>(null);
@@ -80,6 +83,17 @@ export function OperationsDeptClient() {
       setTasks(Array.isArray(tasksData) ? tasksData : []);
       setPendingAttendance(
         (attData.records || []).filter((r: { approvalStatus: string }) => r.approvalStatus === "PENDING")
+      );
+      setVerifiedAttendance(
+        (attData.records || [])
+          .filter((r: { photoUrl?: string | null; checkIn?: string | null }) => r.photoUrl && r.checkIn)
+          .map((r: { id: string; employee: { firstName: string; lastName: string }; workDate: string; checkIn: string | null; photoUrl: string | null }) => ({
+            id: r.id,
+            employee: r.employee,
+            workDate: r.workDate,
+            checkIn: r.checkIn,
+            photoUrl: r.photoUrl,
+          }))
       );
     } finally {
       setLoading(false);
@@ -168,6 +182,7 @@ export function OperationsDeptClient() {
         <OpsApprovalsSection
           pendingTasks={pendingTasks}
           pendingAttendance={pendingAttendance}
+          verifiedAttendance={verifiedAttendance}
           adjustQty={adjustQty}
           setAdjustQty={setAdjustQty}
           onApproveTask={approveTask}

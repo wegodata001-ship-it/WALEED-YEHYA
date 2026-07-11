@@ -136,6 +136,7 @@ export function EmployeesRegisterSection({
 export function EmployeesCardSection({
   days,
   pendingAttendance,
+  verifiedAttendance,
   onApproveAttendance,
   onOpenEmployee,
 }: {
@@ -145,12 +146,52 @@ export function EmployeesCardSection({
     employee: { firstName: string; lastName: string };
     correctionNote: string | null;
     workDate: string;
+    photoUrl?: string | null;
+  }[];
+  verifiedAttendance: {
+    id: string;
+    employee: { firstName: string; lastName: string };
+    workDate: string;
+    checkIn: string | null;
+    photoUrl: string | null;
   }[];
   onApproveAttendance: (id: string) => void;
   onOpenEmployee: (name: string) => void;
 }) {
   return (
     <div className="space-y-4">
+      {verifiedAttendance.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-extrabold text-primary-dark">אימות נוכחות — צילומי כניסה</h3>
+          <div className="work-card-grid">
+            {verifiedAttendance.map((r) => (
+              <WorkCardDetail
+                key={r.id}
+                date={new Date(r.workDate).toLocaleDateString("he-IL")}
+                title={`${r.employee.firstName} ${r.employee.lastName}`}
+                subtitle={
+                  r.checkIn
+                    ? `כניסה ${new Date(r.checkIn).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`
+                    : "כניסה"
+                }
+                fields={[{ label: "אימות", value: "תמונה צורפה" }]}
+                footer={
+                  r.photoUrl ? (
+                    <div className="px-4 pb-3">
+                      <img
+                        src={r.photoUrl}
+                        alt={`אימות ${r.employee.firstName}`}
+                        className="w-full h-36 object-cover rounded-lg border border-border"
+                      />
+                    </div>
+                  ) : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {pendingAttendance.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-sm font-extrabold text-amber-800">בקשות תיקון נוכחות לאישור</h3>

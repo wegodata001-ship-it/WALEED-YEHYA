@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getDefaultUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -13,26 +14,31 @@ function parseNum(v: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const includeInactive = searchParams.get("all") === "true";
-  const org = await getDefaultOrg();
+  try {
+    await requireManager();
+    const { searchParams } = new URL(req.url);
+    const includeInactive = searchParams.get("all") === "true";
+    const org = await getDefaultOrg();
 
-  const vehicles = await prisma.vehicle.findMany({
-    where: {
-      organizationId: org.id,
-      ...(includeInactive ? {} : { isActive: true }),
-    },
-    orderBy: [{ vehicleType: "asc" }, { licensePlate: "asc" }],
-  });
+    const vehicles = await prisma.vehicle.findMany({
+      where: {
+        organizationId: org.id,
+        ...(includeInactive ? {} : { isActive: true }),
+      },
+      orderBy: [{ vehicleType: "asc" }, { licensePlate: "asc" }],
+    });
 
-  return NextResponse.json(vehicles);
+    return NextResponse.json(vehicles);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const org = await getDefaultOrg();
-    const user = await getDefaultUser();
+    const user = await requireManager();
 
     const vehicle = await prisma.vehicle.create({
       data: {
@@ -73,6 +79,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(vehicle, { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה ביצירת כלי רכב" }, { status: 500 });
   }

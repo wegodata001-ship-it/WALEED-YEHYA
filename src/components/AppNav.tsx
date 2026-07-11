@@ -12,10 +12,12 @@ import {
   Wallet,
   Users,
   UserRound,
+  CalendarDays,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
+  { href: "/schedule", label: "סידור עבודה", icon: CalendarDays },
   { href: "/machinery", label: "מכונות", icon: Tractor },
   { href: "/operations", label: "תפעול", icon: Briefcase },
   { href: "/finance", label: "כספים", icon: Wallet },
@@ -26,6 +28,7 @@ const NAV = [
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
+  if (href === "/schedule") return pathname.startsWith("/schedule");
   if (href === "/operations") {
     return pathname.startsWith("/operations") || pathname.startsWith("/fuel");
   }
@@ -82,9 +85,9 @@ export function AppToolbar() {
         </nav>
 
         <div className="app-toolbar-actions shrink-0">
-          <Link href="/mobile" className="app-action app-action-field">
+          <Link href="/employee" className="app-action app-action-field">
             <Smartphone className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">שטח</span>
+            <span className="hidden sm:inline">עובדים</span>
           </Link>
           <button type="button" onClick={logout} className="app-action" title="יציאה">
             <LogOut className="h-3.5 w-3.5" />

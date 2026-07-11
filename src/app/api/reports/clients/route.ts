@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { parseDateRange } from "@/lib/dateRange";
+import { handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireManager();
   const { searchParams } = new URL(req.url);
   const groupBy = searchParams.get("groupBy") || "settlement";
   const org = await getDefaultOrg();
@@ -71,4 +74,7 @@ export async function GET(req: NextRequest) {
   const grandTotal = rows.reduce((s, r) => s + r.totalQuantity, 0);
 
   return NextResponse.json({ start, end, groupBy, rows, grandTotal, entryCount: logs.length });
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }

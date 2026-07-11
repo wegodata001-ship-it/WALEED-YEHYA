@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
+import { handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireManager();
   const { searchParams } = new URL(req.url);
   const year = Number(searchParams.get("year") || new Date().getFullYear());
   const month = Number(searchParams.get("month") || new Date().getMonth() + 1);
@@ -71,4 +74,7 @@ export async function GET(req: NextRequest) {
     rowTotals,
     grandTotal: Object.values(columnTotals).reduce((a, b) => a + b, 0),
   });
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }

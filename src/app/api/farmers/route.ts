@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function GET() {
-  const org = await getDefaultOrg();
-  const farmers = await prisma.farmer.findMany({
-    where: { organizationId: org.id },
-    include: { moshav: { select: { id: true, name: true, nameHe: true } } },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-  });
-  return NextResponse.json(farmers);
+  try {
+    await requireManager();
+    const org = await getDefaultOrg();
+    const farmers = await prisma.farmer.findMany({
+      where: { organizationId: org.id },
+      include: { moshav: { select: { id: true, name: true, nameHe: true } } },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    });
+    return NextResponse.json(farmers);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireManager();
     const org = await getDefaultOrg();
     const body = await req.json();
     const firstName = String(body.firstName || "").trim();
@@ -47,6 +54,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(farmer, { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה ביצירת לקוח" }, { status: 500 });
   }

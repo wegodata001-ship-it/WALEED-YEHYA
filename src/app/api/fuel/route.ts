@@ -3,8 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg, getCurrentUser } from "@/lib/org";
 import { FuelTransactionType, LedgerCategory, LedgerEntryType } from "@prisma/client";
 import { parseDateRange } from "@/lib/dateRange";
+import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireManager();
   const { searchParams } = new URL(req.url);
   const limit = Number(searchParams.get("limit") || 50);
   const hasDate =
@@ -39,17 +42,21 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(transactions);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuthUser();
     const body = await req.json();
     const org = await getDefaultOrg();
     const user = await getCurrentUser();
 
     const liters = Number(body.liters);
 
-    let recipient = body.recipientId
+    const recipient = body.recipientId
       ? await prisma.fuelRecipient.findUnique({ where: { id: body.recipientId } })
       : null;
 
@@ -60,7 +67,7 @@ export async function POST(req: NextRequest) {
         : 6.85;
 
     let vehicleId = body.vehicleId || recipient?.vehicleId;
-    let subcontractorId = body.subcontractorId || recipient?.subcontractorId;
+    const subcontractorId = body.subcontractorId || recipient?.subcontractorId;
 
     if (!vehicleId && body.licensePlate) {
       const vehicle = await prisma.vehicle.findFirst({
@@ -133,6 +140,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(tx, { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בשמירת תדלוק" }, { status: 500 });
   }

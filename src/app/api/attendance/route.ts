@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getCurrentUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
 import { parseDateRange } from "@/lib/dateRange";
+import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
+import { isEmployeeRole } from "@/lib/roles";
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const org = await getDefaultOrg();
-  const user = await getCurrentUser();
-  const employeeId = searchParams.get("employeeId") || user.employeeId || undefined;
-  const { start, end, year, month } = parseDateRange(searchParams);
+  try {
+    const user = await requireAuthUser();
+    const { searchParams } = new URL(req.url);
+    const org = await getDefaultOrg();
+
+    let employeeId = searchParams.get("employeeId") || user.employeeId || undefined;
+    if (isEmployeeRole(user.role)) {
+      if (!user.employeeId) throw new ApiAuthError(403, "אין הרשאה");
+      employeeId = user.employeeId;
+    }
+
+    const { start, end, year, month } = parseDateRange(searchParams);
 
   const where = {
     organizationId: org.id,
@@ -63,19 +72,31 @@ export async function GET(req: NextRequest) {
       pendingApprovals: records.filter((r) => r.approvalStatus === "PENDING").length,
     },
   });
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const org = await getDefaultOrg();
-    const user = await getCurrentUser();
-    const employeeId = body.employeeId || user.employeeId;
+    const user = await requireAuthUser();
+
+    const action = body.action || "create";
+    let employeeId = body.employeeId || user.employeeId;
+
+    if (isEmployeeRole(user.role)) {
+      if (!user.employeeId) throw new ApiAuthError(403, "אין הרשאה");
+      employeeId = user.employeeId;
+      if (!["check_in", "check_out", "correction"].includes(action)) {
+        throw new ApiAuthError(403, "אין הרשאה");
+      }
+    }
+
     if (!employeeId) {
       return NextResponse.json({ error: "לא משויך עובד למשתמש" }, { status: 400 });
     }
-
-    const action = body.action || "create";
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(todayStart);
@@ -100,6 +121,7 @@ export async function POST(req: NextRequest) {
           workDate: todayStart,
           status: "PRESENT",
           checkIn: new Date(),
+          photoUrl: typeof body.photoUrl === "string" && body.photoUrl.trim() ? body.photoUrl.trim() : null,
           createdById: user.id,
           syncStatus: "SYNCED",
           approvalStatus: "APPROVED",
@@ -196,6 +218,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(record, { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בשמירת נוכחות" }, { status: 500 });
   }
@@ -203,7 +226,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await getCurrentUser();
+    await requireManager();
     const body = await req.json();
     if (!body.id) return NextResponse.json({ error: "חסר מזהה" }, { status: 400 });
 
@@ -219,6 +242,7 @@ export async function PATCH(req: NextRequest) {
     });
     return NextResponse.json(record);
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בעדכון נוכחות" }, { status: 500 });
   }

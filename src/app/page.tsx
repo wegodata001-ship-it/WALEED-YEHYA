@@ -12,10 +12,10 @@ export default function HomePage() {
           <p className="text-xs text-muted">סיכום לפי מחלקה — מכונות · תפעול · כספים · רכב · לקוחות · עובדים</p>
         </div>
         <Link
-          href="/mobile"
+          href="/employee"
           className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-dark"
         >
-          <Smartphone className="h-4 w-4" /> ממשק שטח
+          <Smartphone className="h-4 w-4" /> ממשק עובד
         </Link>
       </div>
 

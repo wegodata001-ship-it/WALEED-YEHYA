@@ -3,8 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { parseDateRange } from "@/lib/dateRange";
 import { LedgerCategory, LedgerEntryType } from "@prisma/client";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireManager();
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type") || "all";
   const org = await getDefaultOrg();
@@ -102,10 +105,14 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({ start, end, movements, employeeBalance });
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireManager();
     const org = await getDefaultOrg();
     const body = await req.json();
     const amount = Number(body.amount);
@@ -154,7 +161,7 @@ export async function POST(req: NextRequest) {
       if (!customerName && !body.farmerId) {
         return NextResponse.json({ error: "בחר או הזן לקוח" }, { status: 400 });
       }
-      let farmerId = body.farmerId || null;
+      const farmerId = body.farmerId || null;
       let name = customerName;
       if (farmerId) {
         const farmer = await prisma.farmer.findFirst({
@@ -191,6 +198,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "סוג יעד לא נתמך (employee / customer)" }, { status: 400 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בשמירת תנועה" }, { status: 500 });
   }

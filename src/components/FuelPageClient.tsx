@@ -99,7 +99,7 @@ export function FuelPageClient() {
           </button>
         </div>
         <Link
-          href="/mobile/fuel"
+          href="/employee/fuel"
           className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white"
         >
           <Plus className="h-4 w-4" />

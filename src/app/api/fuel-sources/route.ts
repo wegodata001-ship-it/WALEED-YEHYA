@@ -2,24 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { FuelSourceType } from "@prisma/client";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function GET() {
-  const org = await getDefaultOrg();
-  const sources = await prisma.fuelSource.findMany({
-    where: { organizationId: org.id },
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-  });
-  return NextResponse.json(
-    sources.map((s) => ({
-      ...s,
-      currentLevel: Number(s.currentLevel),
-      capacityLiters: s.capacityLiters != null ? Number(s.capacityLiters) : null,
-    }))
-  );
+  try {
+    await requireManager();
+    const org = await getDefaultOrg();
+    const sources = await prisma.fuelSource.findMany({
+      where: { organizationId: org.id },
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    });
+    return NextResponse.json(
+      sources.map((s) => ({
+        ...s,
+        currentLevel: Number(s.currentLevel),
+        capacityLiters: s.capacityLiters != null ? Number(s.capacityLiters) : null,
+      }))
+    );
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireManager();
     const org = await getDefaultOrg();
     const body = await req.json();
     const name = String(body.name || "").trim();
@@ -46,6 +53,7 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה ביצירת מיכל" }, { status: 500 });
   }

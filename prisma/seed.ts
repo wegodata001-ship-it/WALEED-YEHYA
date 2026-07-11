@@ -1,6 +1,8 @@
 /**
- * Clean bootstrap seed — empty system ready for the owner to enter real data.
- * Login: 0500000000 / 1234
+ * Full data reset — keeps only one manager + one employee.
+ * Login:
+ *   Manager:  0500000000 / 1234
+ *   Employee: 0542222222 / 1234
  */
 import { PrismaClient, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -9,13 +11,12 @@ const prisma = new PrismaClient();
 const DEMO_PASSWORD = bcrypt.hashSync("1234", 10);
 
 async function wipe() {
-  // Child tables first
   await prisma.customerLedgerEntry.deleteMany();
   await prisma.serviceLineItem.deleteMany();
   await prisma.serviceRecord.deleteMany();
-  await prisma.fieldTask.deleteMany();
   await prisma.communicationLog.deleteMany();
   await prisma.timeEntry.deleteMany();
+  await prisma.fieldTask.deleteMany();
   await prisma.attendanceRecord.deleteMany();
   await prisma.machineryWorkLog.deleteMany();
   await prisma.machineryUnit.deleteMany();
@@ -52,6 +53,7 @@ async function wipe() {
 }
 
 async function main() {
+  console.log("מנקה את כל הנתונים...");
   await wipe();
 
   const org = await prisma.organization.create({
@@ -78,8 +80,36 @@ async function main() {
     },
   });
 
-  console.log("✓ System reset — empty data ready for your details");
-  console.log("  Login: 0500000000 / 1234");
+  const employee = await prisma.employee.create({
+    data: {
+      organizationId: org.id,
+      employeeNumber: "001",
+      firstName: "מןחמד",
+      lastName: "אבוליל",
+      phone: "972542222222",
+      position: "מפעיל שטח",
+      salaryType: "HOURLY",
+      isActive: true,
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      organizationId: org.id,
+      email: "employee@walledyehya.group",
+      passwordHash: DEMO_PASSWORD,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      phone: "972542222222",
+      role: UserRole.FIELD_OPERATOR,
+      employeeId: employee.id,
+      isActive: true,
+    },
+  });
+
+  console.log("✓ המערכת נוקתה — נשארו מנהל ועובד בלבד");
+  console.log("  מנהל:  0500000000 / 1234");
+  console.log("  עובד:  0542222222 / 1234");
 }
 
 main()

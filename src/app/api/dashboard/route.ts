@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
+import { handleApiAuth, requireManager } from "@/lib/api-auth";
 
 function parseRange(searchParams: URLSearchParams) {
   const year = Number(searchParams.get("year"));
@@ -22,6 +23,8 @@ function parseRange(searchParams: URLSearchParams) {
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireManager();
   const { searchParams } = new URL(req.url);
   const org = await getDefaultOrg();
   const { start, end } = parseRange(searchParams);
@@ -178,4 +181,7 @@ export async function GET(req: NextRequest) {
       capacity: s.capacityLiters ? Number(s.capacityLiters) : null,
     })),
   });
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }

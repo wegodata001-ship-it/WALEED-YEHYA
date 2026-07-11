@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
+import { handleApiAuth, requireAuthUser } from "@/lib/api-auth";
 
 export async function GET() {
+  try {
+    await requireAuthUser();
   const org = await getDefaultOrg();
 
   const [plots, vehicles, employees, fuelSources, fuelRecipients, machineryUnits] = await Promise.all([
@@ -61,4 +64,7 @@ export async function GET() {
   ]);
 
   return NextResponse.json({ plots, vehicles, employees, fuelSources, fuelRecipients, machineryUnits, org: { id: org.id, name: org.name } });
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }

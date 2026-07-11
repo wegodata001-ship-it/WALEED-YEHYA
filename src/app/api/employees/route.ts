@@ -1,24 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getCurrentUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
 import { hashPassword, normalizePhone } from "@/lib/auth";
 import { UserRole } from "@prisma/client";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function GET() {
-  const org = await getDefaultOrg();
-  const employees = await prisma.employee.findMany({
-    where: { organizationId: org.id },
-    include: { user: { select: { id: true, phone: true, role: true, isActive: true } } },
-    orderBy: { firstName: "asc" },
-  });
-  return NextResponse.json(employees);
+  try {
+    await requireManager();
+    const org = await getDefaultOrg();
+    const employees = await prisma.employee.findMany({
+      where: { organizationId: org.id },
+      include: { user: { select: { id: true, phone: true, role: true, isActive: true } } },
+      orderBy: { firstName: "asc" },
+    });
+    return NextResponse.json(employees);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const org = await getDefaultOrg();
-    await getCurrentUser();
+    await requireManager();
 
     const phone = normalizePhone(String(body.phone));
     const password = String(body.password || "1234");
@@ -59,6 +65,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ employee, user: { id: user.id, phone: user.phone, role: user.role } }, { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בהוספת עובד" }, { status: 500 });
   }

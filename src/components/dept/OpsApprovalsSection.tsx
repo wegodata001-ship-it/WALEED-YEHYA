@@ -2,11 +2,13 @@
 
 import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
+import { MediaGallery } from "@/components/storage/MediaGallery";
 import type { FieldTaskRow } from "@/components/dept/types";
 
 export function OpsApprovalsSection({
   pendingTasks,
   pendingAttendance,
+  verifiedAttendance,
   adjustQty,
   setAdjustQty,
   onApproveTask,
@@ -18,6 +20,14 @@ export function OpsApprovalsSection({
     employee: { firstName: string; lastName: string };
     correctionNote: string | null;
     workDate: string;
+    photoUrl?: string | null;
+  }[];
+  verifiedAttendance: {
+    id: string;
+    employee: { firstName: string; lastName: string };
+    workDate: string;
+    checkIn: string | null;
+    photoUrl: string | null;
   }[];
   adjustQty: Record<string, string>;
   setAdjustQty: (v: Record<string, string>) => void;
@@ -26,6 +36,36 @@ export function OpsApprovalsSection({
 }) {
   return (
     <div className="space-y-5">
+      <section className="space-y-2">
+        <h3 className="text-sm font-extrabold text-primary-dark">אימות נוכחות — צילומי כניסה</h3>
+        {verifiedAttendance.length === 0 ? (
+          <p className="text-sm text-muted">אין רישומי כניסה עם תמונה בטווח שנבחר</p>
+        ) : (
+          <div className="work-card-grid">
+            {verifiedAttendance.map((r) => (
+              <WorkCardDetail
+                key={r.id}
+                date={new Date(r.workDate).toLocaleDateString("he-IL")}
+                title={`${r.employee.firstName} ${r.employee.lastName}`}
+                subtitle={
+                  r.checkIn
+                    ? `כניסה ${new Date(r.checkIn).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`
+                    : "כניסה"
+                }
+                fields={[{ label: "אימות", value: r.photoUrl ? "תמונה צורפה" : "ללא תמונה" }]}
+                footer={
+                  r.photoUrl ? (
+                    <div className="px-4 pb-3">
+                      <MediaGallery legacyUrls={[r.photoUrl]} />
+                    </div>
+                  ) : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="space-y-2">
         <h3 className="text-sm font-extrabold text-primary-dark">אישורי כמויות משימות שטח</h3>
         {pendingTasks.length === 0 ? (
@@ -40,7 +80,15 @@ export function OpsApprovalsSection({
                 subtitle={`${t.assignee.firstName} ${t.assignee.lastName}`}
                 fields={[
                   { label: "ישוב", value: t.settlement || "—" },
-                  { label: "חלקה", value: t.plotName || "—" },
+                  { label: "סוג עבודה", value: t.workType || t.plotName || "—" },
+                  { label: "רכב", value: t.vehiclePlate || "—" },
+                  { label: "מכונה", value: t.machineryUnit?.name || "—" },
+                  ...(t.startedAt
+                    ? [{ label: "התחיל", value: new Date(t.startedAt).toLocaleString("he-IL") }]
+                    : []),
+                  ...(t.completedAt
+                    ? [{ label: "הסתיים", value: new Date(t.completedAt).toLocaleString("he-IL") }]
+                    : []),
                   {
                     label: "תוכנן",
                     value: `${t.plannedQuantity} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
@@ -50,9 +98,15 @@ export function OpsApprovalsSection({
                     value: `${t.reportedQuantity ?? "—"} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
                   },
                 ]}
-                notes={t.actualNotes}
+                notes={t.employeeNotes || t.actualNotes}
                 footer={
-                  <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
+                  <>
+                    {(t.media?.length || t.photoUrls?.length) ? (
+                      <div className="px-4 pb-2">
+                        <MediaGallery media={t.media} legacyUrls={t.photoUrls} />
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
                     <button
                       type="button"
                       onClick={() => onApproveTask(t.id, t.reportedQuantity ?? undefined)}
@@ -76,6 +130,7 @@ export function OpsApprovalsSection({
                       עדכן ואשר
                     </button>
                   </div>
+                  </>
                 }
               />
             ))}

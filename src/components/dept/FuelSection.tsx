@@ -108,7 +108,7 @@ export function FuelSection({
             <Plus className="h-3.5 w-3.5" /> הוסף מיכל
           </button>
           <Link
-            href="/mobile/fuel"
+            href="/employee/fuel"
             className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold"
           >
             <Smartphone className="h-3.5 w-3.5" /> דיווח דלק

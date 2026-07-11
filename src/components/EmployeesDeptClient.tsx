@@ -22,7 +22,10 @@ export function EmployeesDeptClient() {
   const [days, setDays] = useState<DayRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [pendingAttendance, setPendingAttendance] = useState<
-    { id: string; employee: { firstName: string; lastName: string }; correctionNote: string | null; workDate: string }[]
+    { id: string; employee: { firstName: string; lastName: string }; correctionNote: string | null; workDate: string; photoUrl?: string | null }[]
+  >([]);
+  const [verifiedAttendance, setVerifiedAttendance] = useState<
+    { id: string; employee: { firstName: string; lastName: string }; workDate: string; checkIn: string | null; photoUrl: string | null }[]
   >([]);
   const [showAdd, setShowAdd] = useState(false);
   const [empForm, setEmpForm] = useState({
@@ -54,6 +57,17 @@ export function EmployeesDeptClient() {
       setDays(empReport.days || []);
       setPendingAttendance(
         (attData.records || []).filter((r: { approvalStatus: string }) => r.approvalStatus === "PENDING")
+      );
+      setVerifiedAttendance(
+        (attData.records || [])
+          .filter((r: { photoUrl?: string | null; checkIn?: string | null }) => r.photoUrl && r.checkIn)
+          .map((r: { id: string; employee: { firstName: string; lastName: string }; workDate: string; checkIn: string | null; photoUrl: string | null }) => ({
+            id: r.id,
+            employee: r.employee,
+            workDate: r.workDate,
+            checkIn: r.checkIn,
+            photoUrl: r.photoUrl,
+          }))
       );
       if (Array.isArray(empList)) {
         setEmployees(
@@ -168,6 +182,7 @@ export function EmployeesDeptClient() {
         <EmployeesCardSection
           days={filteredDays}
           pendingAttendance={pendingAttendance}
+          verifiedAttendance={verifiedAttendance}
           onApproveAttendance={approveAttendance}
           onOpenEmployee={(name) => setQ(name)}
         />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getDefaultUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -13,10 +14,15 @@ function parseNum(v: unknown) {
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const vehicle = await prisma.vehicle.findUnique({ where: { id } });
-  if (!vehicle) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
-  return NextResponse.json(vehicle);
+  try {
+    await requireManager();
+    const { id } = await params;
+    const vehicle = await prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
+    return NextResponse.json(vehicle);
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await req.json();
     const org = await getDefaultOrg();
-    const user = await getDefaultUser();
+    const user = await requireManager();
 
     const old = await prisma.vehicle.findUnique({ where: { id } });
     if (!old) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
@@ -69,6 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     return NextResponse.json(vehicle);
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בעדכון כלי רכב" }, { status: 500 });
   }
@@ -78,7 +85,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const org = await getDefaultOrg();
-    const user = await getDefaultUser();
+    const user = await requireManager();
 
     const old = await prisma.vehicle.findUnique({ where: { id } });
     if (!old) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
@@ -101,6 +108,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה במחיקת כלי רכב" }, { status: 500 });
   }

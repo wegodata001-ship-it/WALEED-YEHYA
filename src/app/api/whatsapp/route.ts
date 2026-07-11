@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { CommunicationChannel, CommunicationStatus } from "@prisma/client";
+import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
   try {
+    await requireManager();
     const body = await req.json();
     const org = await getDefaultOrg();
     const phone = body.phone || org.managerPhone || process.env.WHATSAPP_MANAGER_PHONE;
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url, phone });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
     return NextResponse.json({ error: "שגיאה בשליחת WhatsApp" }, { status: 500 });
   }

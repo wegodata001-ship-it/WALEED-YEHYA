@@ -1,106 +1,238 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getCurrentUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
 import { parseDateRange } from "@/lib/dateRange";
+import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
+import { isEmployeeRole, isManagerRole } from "@/lib/roles";
+import {
+  encodeVehicleInDescription,
+  getTaskMedia,
+  parseSessionMeta,
+  parseVehicleFromDescription,
+  serializeSessionMeta,
+  stripVehicleFromDescription,
+} from "@/lib/field-task-utils";
+
+function serializeTask(t: {
+  id: string;
+  workDate: Date;
+  settlement: string | null;
+  customerName: string | null;
+  plotName: string | null;
+  plannedQuantity: { toString(): string } | number;
+  reportedQuantity: { toString(): string } | number | null;
+  quantityUnit: string;
+  taskDescription: string | null;
+  actualNotes: string | null;
+  status: string;
+  approvalStatus: string;
+  completedAt: Date | null;
+  assigneeId: string;
+  machineryUnitId: string | null;
+  assignee?: { id?: string; firstName: string; lastName: string };
+  machineryUnit?: { id?: string; name: string } | null;
+}) {
+  const session = parseSessionMeta(t.actualNotes);
+  const media = getTaskMedia(session);
+  return {
+    ...t,
+    plannedQuantity: Number(t.plannedQuantity),
+    reportedQuantity: t.reportedQuantity != null ? Number(t.reportedQuantity) : null,
+    vehiclePlate: parseVehicleFromDescription(t.taskDescription),
+    managerNotes: stripVehicleFromDescription(t.taskDescription),
+    workType: t.plotName,
+    session,
+    employeeNotes: session.employeeNotes || (t.status === "COMPLETED" && !session.startedAt ? t.actualNotes : null),
+    media,
+    photoUrls: session.photoUrls || media.map((m) => m.path),
+    startedAt: session.startedAt || null,
+    completedAt: t.completedAt ? t.completedAt.toISOString() : session.completedAt || null,
+  };
+}
 
 export async function GET(req: NextRequest) {
-  const org = await getDefaultOrg();
-  const user = await getCurrentUser();
-  const { searchParams } = new URL(req.url);
-  const mine = searchParams.get("mine") === "1";
-  const status = searchParams.get("status");
-  const { start, end } = parseDateRange(searchParams);
+  try {
+    const user = await requireAuthUser();
+    const { searchParams } = new URL(req.url);
+    const mine = searchParams.get("mine") === "1";
 
-  const tasks = await prisma.fieldTask.findMany({
-    where: {
-      organizationId: org.id,
-      workDate: { gte: start, lt: end },
-      ...(mine && user.employeeId ? { assigneeId: user.employeeId } : {}),
-      ...(status ? { status } : {}),
-    },
-    include: {
-      assignee: { select: { id: true, firstName: true, lastName: true } },
-      machineryUnit: { select: { id: true, name: true } },
-    },
-    orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
-  });
+    if (isEmployeeRole(user.role)) {
+      if (!mine || !user.employeeId) {
+        throw new ApiAuthError(403, "אין הרשאה");
+      }
+    }
 
-  return NextResponse.json(
-    tasks.map((t) => ({
-      ...t,
-      plannedQuantity: Number(t.plannedQuantity),
-      reportedQuantity: t.reportedQuantity != null ? Number(t.reportedQuantity) : null,
-    }))
-  );
+    const org = await getDefaultOrg();
+    const status = searchParams.get("status");
+    const statuses = searchParams.get("statuses");
+    const { start, end } = parseDateRange(searchParams);
+
+    const statusFilter = statuses
+      ? { in: statuses.split(",").map((s) => s.trim()).filter(Boolean) }
+      : status
+        ? status
+        : undefined;
+
+    const tasks = await prisma.fieldTask.findMany({
+      where: {
+        organizationId: org.id,
+        workDate: { gte: start, lt: end },
+        ...(mine && user.employeeId ? { assigneeId: user.employeeId } : {}),
+        ...(statusFilter ? { status: statusFilter } : {}),
+      },
+      include: {
+        assignee: { select: { id: true, firstName: true, lastName: true } },
+        machineryUnit: { select: { id: true, name: true } },
+      },
+      orderBy: [{ workDate: "asc" }, { createdAt: "desc" }],
+    });
+
+    return NextResponse.json(tasks.map(serializeTask));
+  } catch (e) {
+    return handleApiAuth(e);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireManager();
     const body = await req.json();
     const org = await getDefaultOrg();
-    const user = await getCurrentUser();
+
+    const workDateRaw = body.workDate || new Date();
+    const workTime = body.workTime as string | undefined;
+    const workDate = new Date(workDateRaw);
+    if (workTime && /^\d{1,2}:\d{2}$/.test(workTime)) {
+      const [h, m] = workTime.split(":").map(Number);
+      workDate.setHours(h, m, 0, 0);
+    }
 
     const task = await prisma.fieldTask.create({
       data: {
         organizationId: org.id,
         assigneeId: body.assigneeId,
-        workDate: new Date(body.workDate || new Date()),
+        workDate,
         machineryUnitId: body.machineryUnitId || null,
-        settlement: body.settlement || null,
+        settlement: body.settlement || body.address || null,
         customerName: body.customerName || null,
-        plotName: body.plotName || null,
-        plannedQuantity: Number(body.plannedQuantity || body.acresWorked || 0),
+        plotName: body.workType || body.plotName || null,
+        plannedQuantity: Number(body.plannedQuantity ?? 1),
         quantityUnit: body.quantityUnit || "DUNAM",
-        taskDescription: body.taskDescription || null,
+        taskDescription: encodeVehicleInDescription(body.vehiclePlate, body.taskDescription || body.notes || null),
         status: "ASSIGNED",
         approvalStatus: "PENDING",
         createdById: user.id,
       },
       include: {
-        assignee: { select: { firstName: true, lastName: true } },
-        machineryUnit: { select: { name: true } },
+        assignee: { select: { id: true, firstName: true, lastName: true } },
+        machineryUnit: { select: { id: true, name: true } },
       },
     });
 
-    return NextResponse.json(
-      { ...task, plannedQuantity: Number(task.plannedQuantity) },
-      { status: 201 }
-    );
+    return NextResponse.json(serializeTask(task), { status: 201 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
-    return NextResponse.json({ error: "שגיאה ביצירת משימה" }, { status: 500 });
+    return NextResponse.json({ error: "שגיאה ביצירת סידור עבודה" }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const user = await getCurrentUser();
+    const user = await requireAuthUser();
     if (!body.id) return NextResponse.json({ error: "חסר מזהה" }, { status: 400 });
 
-    // Field worker completes task
-    if (body.action === "complete") {
-      const reported = Number(body.reportedQuantity);
-      const task = await prisma.fieldTask.findUnique({ where: { id: body.id } });
-      if (!task) return NextResponse.json({ error: "משימה לא נמצאה" }, { status: 404 });
+    const task = await prisma.fieldTask.findUnique({
+      where: { id: body.id },
+      include: { assignee: { select: { firstName: true, lastName: true } } },
+    });
+    if (!task) return NextResponse.json({ error: "סידור עבודה לא נמצא" }, { status: 404 });
 
-      const needsReview = Math.abs(reported - Number(task.plannedQuantity)) > 0.01;
+    const isStartOrComplete = body.action === "start" || body.action === "complete";
+    const isManagerAction = body.action === "approve" || body.action === "adjust";
+
+    if (isStartOrComplete) {
+      if (isEmployeeRole(user.role)) {
+        if (!user.employeeId || task.assigneeId !== user.employeeId) {
+          throw new ApiAuthError(403, "אין הרשאה");
+        }
+      } else if (!isManagerRole(user.role)) {
+        throw new ApiAuthError(403, "אין הרשאה");
+      }
+    } else if (isManagerAction) {
+      if (!isManagerRole(user.role)) throw new ApiAuthError(403, "אין הרשאה");
+    } else {
+      return NextResponse.json({ error: "פעולה לא ידועה" }, { status: 400 });
+    }
+
+    if (body.action === "start") {
+      if (task.status !== "ASSIGNED") {
+        return NextResponse.json({ error: "העבודה כבר התחילה או הסתיימה" }, { status: 400 });
+      }
+      const updated = await prisma.fieldTask.update({
+        where: { id: body.id },
+        data: {
+          status: "IN_PROGRESS",
+          actualNotes: serializeSessionMeta({ startedAt: new Date().toISOString() }),
+        },
+        include: {
+          assignee: { select: { id: true, firstName: true, lastName: true } },
+          machineryUnit: { select: { id: true, name: true } },
+        },
+      });
+      return NextResponse.json(serializeTask(updated));
+    }
+
+    if (body.action === "complete") {
+      const reported = body.reportedQuantity != null ? Number(body.reportedQuantity) : Number(task.plannedQuantity);
+      const existing = parseSessionMeta(task.actualNotes);
+      const media = Array.isArray(body.media)
+        ? body.media
+            .filter(
+              (m: unknown) =>
+                m &&
+                typeof m === "object" &&
+                "path" in m &&
+                typeof (m as { path: unknown }).path === "string"
+            )
+            .map((m: { path: string; kind?: string; mimeType?: string }) => ({
+              path: m.path,
+              kind: m.kind === "video" ? ("video" as const) : ("image" as const),
+              mimeType: m.mimeType || (m.kind === "video" ? "video/mp4" : "image/jpeg"),
+            }))
+        : [];
+      const legacyPhotoUrls = Array.isArray(body.photoUrls)
+        ? body.photoUrls.filter((u: unknown) => typeof u === "string")
+        : [];
+      const completedAt = new Date().toISOString();
+      const sessionMeta = serializeSessionMeta({
+        startedAt: existing.startedAt || completedAt,
+        completedAt,
+        media: media.length > 0 ? media : undefined,
+        photoUrls: media.length === 0 && legacyPhotoUrls.length > 0 ? legacyPhotoUrls : undefined,
+        employeeNotes: body.actualNotes || body.employeeNotes || null,
+      });
+
+      const hasMedia = media.length > 0 || legacyPhotoUrls.length > 0;
+      const needsReview =
+        Math.abs(reported - Number(task.plannedQuantity)) > 0.01 || hasMedia || Boolean(body.actualNotes);
+
       const updated = await prisma.fieldTask.update({
         where: { id: body.id },
         data: {
           reportedQuantity: reported,
-          actualNotes: body.actualNotes || null,
+          actualNotes: sessionMeta,
           status: "COMPLETED",
           completedAt: new Date(),
           approvalStatus: needsReview ? "PENDING" : "APPROVED",
         },
         include: {
-          assignee: { select: { firstName: true, lastName: true } },
-          machineryUnit: { select: { name: true } },
+          assignee: { select: { id: true, firstName: true, lastName: true } },
+          machineryUnit: { select: { id: true, name: true } },
         },
       });
 
-      // Sync / create work log for billing
       const org = await getDefaultOrg();
       await prisma.machineryWorkLog.create({
         data: {
@@ -117,20 +249,15 @@ export async function PATCH(req: NextRequest) {
           plannedQuantity: Number(task.plannedQuantity),
           reportedQuantity: reported,
           approvalStatus: needsReview ? "PENDING" : "APPROVED",
-          notes: body.actualNotes || task.taskDescription,
+          notes: body.actualNotes || stripVehicleFromDescription(task.taskDescription) || task.taskDescription,
           createdById: user.id,
           syncStatus: "SYNCED",
         },
       });
 
-      return NextResponse.json({
-        ...updated,
-        plannedQuantity: Number(updated.plannedQuantity),
-        reportedQuantity: updated.reportedQuantity != null ? Number(updated.reportedQuantity) : null,
-      });
+      return NextResponse.json(serializeTask(updated));
     }
 
-    // Manager approve / adjust
     if (body.action === "approve" || body.action === "adjust") {
       const finalQty = body.finalQuantity != null ? Number(body.finalQuantity) : undefined;
       const updated = await prisma.fieldTask.update({
@@ -139,6 +266,10 @@ export async function PATCH(req: NextRequest) {
           approvalStatus: body.action === "approve" || body.approvalStatus === "APPROVED" ? "APPROVED" : body.approvalStatus,
           ...(finalQty != null ? { reportedQuantity: finalQty } : {}),
           status: "COMPLETED",
+        },
+        include: {
+          assignee: { select: { id: true, firstName: true, lastName: true } },
+          machineryUnit: { select: { id: true, name: true } },
         },
       });
 
@@ -167,16 +298,13 @@ export async function PATCH(req: NextRequest) {
         });
       }
 
-      return NextResponse.json({
-        ...updated,
-        plannedQuantity: Number(updated.plannedQuantity),
-        reportedQuantity: updated.reportedQuantity != null ? Number(updated.reportedQuantity) : null,
-      });
+      return NextResponse.json(serializeTask(updated));
     }
 
     return NextResponse.json({ error: "פעולה לא ידועה" }, { status: 400 });
   } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);
-    return NextResponse.json({ error: "שגיאה בעדכון משימה" }, { status: 500 });
+    return NextResponse.json({ error: "שגיאה בעדכון סידור עבודה" }, { status: 500 });
   }
 }
