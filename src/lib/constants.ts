@@ -91,10 +91,38 @@ export const MACHINERY_UNIT_LABELS: Record<string, string> = {
 export const QUANTITY_UNIT_LABELS: Record<string, string> = {
   DUNAM: "דונם",
   HOUR: "שעות",
-  BALE: "אשכולות",
+  BALE: "חבילה גדולה",
   ACRE: "אקר",
   OTHER: "אחר",
 };
+
+/** UI options for schedule — value maps to DB enum + optional label tag */
+export const SCHEDULE_QUANTITY_UNITS = [
+  { value: "DUNAM", label: "דונם" },
+  { value: "HOUR", label: "שעות" },
+  { value: "BALE", label: "חבילה גדולה" },
+  { value: "BALE_MEDIUM", label: "חבילה בינונית" },
+  { value: "BALE_SMALL", label: "חבילה קטנה" },
+] as const;
+
+export const SCHEDULE_MATERIAL_SUGGESTIONS = ["דשן", "חומר ריסוס", "זרעים", "תבן", "אחר"];
+
+export function quantityUnitDisplayLabel(unit: string, unitLabel?: string | null) {
+  if (unitLabel?.trim()) return unitLabel.trim();
+  return QUANTITY_UNIT_LABELS[unit] || unit;
+}
+
+export function parseScheduleQuantityUnit(value: string): { quantityUnit: string; unitLabel?: string } {
+  if (value === "BALE_MEDIUM") return { quantityUnit: "OTHER", unitLabel: "חבילה בינונית" };
+  if (value === "BALE_SMALL") return { quantityUnit: "OTHER", unitLabel: "חבילה קטנה" };
+  return { quantityUnit: value };
+}
+
+export function scheduleQuantityUnitValue(quantityUnit: string, unitLabel?: string | null): string {
+  if (quantityUnit === "OTHER" && unitLabel === "חבילה בינונית") return "BALE_MEDIUM";
+  if (quantityUnit === "OTHER" && unitLabel === "חבילה קטנה") return "BALE_SMALL";
+  return quantityUnit;
+}
 
 export const FUEL_SOURCE_LABELS: Record<string, string> = {
   FIXED_TANK: "מיכל קבוע",

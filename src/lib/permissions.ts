@@ -35,6 +35,9 @@ const EMPLOYEE_API_RULES: ApiRule[] = [
   { methods: ["POST"], pattern: /^\/api\/fuel$/ },
   { methods: ["GET"], pattern: /^\/api\/lookup$/ },
   { methods: ["POST"], pattern: /^\/api\/machinery-units$/ },
+  { methods: ["POST"], pattern: /^\/api\/storage\/upload$/ },
+  { methods: ["POST"], pattern: /^\/api\/storage\/signed-urls$/ },
+  { methods: ["GET"], pattern: /^\/api\/vehicles$/ },
 ];
 
 export function isEmployeeApiAllowed(method: string, pathname: string, url: URL): boolean {

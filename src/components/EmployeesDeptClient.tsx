@@ -25,7 +25,16 @@ export function EmployeesDeptClient() {
     { id: string; employee: { firstName: string; lastName: string }; correctionNote: string | null; workDate: string; photoUrl?: string | null }[]
   >([]);
   const [verifiedAttendance, setVerifiedAttendance] = useState<
-    { id: string; employee: { firstName: string; lastName: string }; workDate: string; checkIn: string | null; photoUrl: string | null }[]
+    {
+      id: string;
+      employee: { firstName: string; lastName: string };
+      workDate: string;
+      checkIn: string | null;
+      checkOut: string | null;
+      gpsLat: number | null;
+      gpsLng: number | null;
+      checkOutGps?: { lat: number; lng: number } | null;
+    }[]
   >([]);
   const [showAdd, setShowAdd] = useState(false);
   const [empForm, setEmpForm] = useState({
@@ -60,14 +69,31 @@ export function EmployeesDeptClient() {
       );
       setVerifiedAttendance(
         (attData.records || [])
-          .filter((r: { photoUrl?: string | null; checkIn?: string | null }) => r.photoUrl && r.checkIn)
-          .map((r: { id: string; employee: { firstName: string; lastName: string }; workDate: string; checkIn: string | null; photoUrl: string | null }) => ({
-            id: r.id,
-            employee: r.employee,
-            workDate: r.workDate,
-            checkIn: r.checkIn,
-            photoUrl: r.photoUrl,
-          }))
+          .filter(
+            (r: { gpsLat?: number | null; checkIn?: string | null }) =>
+              r.checkIn && r.gpsLat != null
+          )
+          .map(
+            (r: {
+              id: string;
+              employee: { firstName: string; lastName: string };
+              workDate: string;
+              checkIn: string | null;
+              checkOut: string | null;
+              gpsLat: number | null;
+              gpsLng: number | null;
+              checkOutGps?: { lat: number; lng: number } | null;
+            }) => ({
+              id: r.id,
+              employee: r.employee,
+              workDate: r.workDate,
+              checkIn: r.checkIn,
+              checkOut: r.checkOut,
+              gpsLat: r.gpsLat,
+              gpsLng: r.gpsLng,
+              checkOutGps: r.checkOutGps,
+            })
+          )
       );
       if (Array.isArray(empList)) {
         setEmployees(

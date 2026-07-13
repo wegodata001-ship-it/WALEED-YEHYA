@@ -3,7 +3,6 @@
  * Login:
  *   Manager:   0500000000 / 1234
  *   Employee:  0542222222 / 1234
- *   Warehouse: 0533333333 / 1234
  */
 import { PrismaClient, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -108,23 +107,9 @@ async function main() {
     },
   });
 
-  await prisma.user.create({
-    data: {
-      organizationId: org.id,
-      email: "warehouse@walledyehya.group",
-      passwordHash: DEMO_PASSWORD,
-      firstName: "מחסנאי",
-      lastName: "מערכת",
-      phone: "972533333333",
-      role: UserRole.WAREHOUSE_MANAGER,
-      isActive: true,
-    },
-  });
-
-  console.log("✓ המערכת נוקתה — נשארו מנהל, עובד ומחסנאי");
-  console.log("  מנהל:   0500000000 / 1234");
-  console.log("  עובד:   0542222222 / 1234");
-  console.log("  מחסנאי: 0533333333 / 1234");
+  console.log("✓ המערכת נוקתה — נשארו מנהל ועובד");
+  console.log("  מנהל: 0500000000 / 1234");
+  console.log("  עובד: 0542222222 / 1234");
 }
 
 main()

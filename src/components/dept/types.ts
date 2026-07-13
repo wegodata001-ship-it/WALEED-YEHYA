@@ -5,8 +5,13 @@ export type FieldTaskRow = {
   customerName: string | null;
   plotName: string | null;
   workType?: string | null;
+  material?: string | null;
+  plot?: string | null;
   vehiclePlate?: string | null;
   managerNotes?: string | null;
+  taskDescription?: string | null;
+  unitLabel?: string | null;
+  quantityUnitLabel?: string;
   plannedQuantity: number;
   reportedQuantity: number | null;
   quantityUnit: string;
@@ -16,10 +21,14 @@ export type FieldTaskRow = {
   employeeNotes?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
+  meterReading?: number | null;
+  meterKind?: "odometer_km" | "engine_hours" | null;
+  session?: { meterReading?: number; meterKind?: "odometer_km" | "engine_hours" };
   photoUrls?: string[];
   media?: { path: string; kind: "image" | "video"; mimeType: string }[];
   assignee: { firstName: string; lastName: string };
   machineryUnit: { name: string } | null;
+  machineryUnitId?: string | null;
 };
 
 export type FuelTx = {

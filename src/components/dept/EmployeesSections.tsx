@@ -1,6 +1,7 @@
 "use client";
 
 import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
+import { mapsLink } from "@/lib/geolocation";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import type { DayRow, Employee } from "@/components/dept/types";
 
@@ -70,7 +71,6 @@ export function EmployeesRegisterSection({
             className="field-input"
           >
             <option value="FIELD_OPERATOR">מפעיל שטח</option>
-            <option value="WAREHOUSE_MANAGER">מחסנאי דלק</option>
             <option value="OFFICE_MANAGER">משרד</option>
           </select>
           <select
@@ -153,7 +153,10 @@ export function EmployeesCardSection({
     employee: { firstName: string; lastName: string };
     workDate: string;
     checkIn: string | null;
-    photoUrl: string | null;
+    checkOut: string | null;
+    gpsLat: number | null;
+    gpsLng: number | null;
+    checkOutGps?: { lat: number; lng: number } | null;
   }[];
   onApproveAttendance: (id: string) => void;
   onOpenEmployee: (name: string) => void;
@@ -162,7 +165,7 @@ export function EmployeesCardSection({
     <div className="space-y-4">
       {verifiedAttendance.length > 0 && (
         <section className="space-y-2">
-          <h3 className="text-sm font-extrabold text-primary-dark">אימות נוכחות — צילומי כניסה</h3>
+          <h3 className="text-sm font-extrabold text-primary-dark">נוכחות — מיקומי GPS</h3>
           <div className="work-card-grid">
             {verifiedAttendance.map((r) => (
               <WorkCardDetail
@@ -174,18 +177,42 @@ export function EmployeesCardSection({
                     ? `כניסה ${new Date(r.checkIn).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`
                     : "כניסה"
                 }
-                fields={[{ label: "אימות", value: "תמונה צורפה" }]}
-                footer={
-                  r.photoUrl ? (
-                    <div className="px-4 pb-3">
-                      <img
-                        src={r.photoUrl}
-                        alt={`אימות ${r.employee.firstName}`}
-                        className="w-full h-36 object-cover rounded-lg border border-border"
-                      />
-                    </div>
-                  ) : undefined
-                }
+                fields={[
+                  ...(r.gpsLat != null && r.gpsLng != null
+                    ? [
+                        {
+                          label: "GPS כניסה",
+                          value: (
+                            <a
+                              href={mapsLink(r.gpsLat, r.gpsLng)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              צפה במפה
+                            </a>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(r.checkOutGps
+                    ? [
+                        {
+                          label: "GPS יציאה",
+                          value: (
+                            <a
+                              href={mapsLink(r.checkOutGps.lat, r.checkOutGps.lng)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              צפה במפה
+                            </a>
+                          ),
+                        },
+                      ]
+                    : []),
+                ]}
               />
             ))}
           </div>

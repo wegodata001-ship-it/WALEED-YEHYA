@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { EmployeeShell } from "@/components/EmployeeShell";
 import { CheckCircle2, Loader2, MapPin, Play, Square } from "lucide-react";
-import { formatTaskDate, formatTaskTime, TASK_STATUS_LABELS } from "@/lib/field-task-utils";
+import { formatTaskDate, formatTaskTime, TASK_STATUS_LABELS, resolveMeterKind, meterKindLabel } from "@/lib/field-task-utils";
 import { MediaUploader } from "@/components/storage/MediaUploader";
 import { deleteStoragePaths } from "@/components/storage/media-utils";
 import type { StoredMediaRef } from "@/lib/storage/types";
@@ -17,11 +17,18 @@ type Task = {
   plotName: string | null;
   vehiclePlate: string | null;
   managerNotes: string | null;
-  taskDescription: string | null;
+  material?: string | null;
+  plot?: string | null;
+  machineryUnit: { id?: string; name: string } | null;
+  machineryUnitId?: string | null;
+  meterKind?: "odometer_km" | "engine_hours" | null;
   status: string;
-  machineryUnit: { name: string } | null;
   startedAt: string | null;
 };
+
+function taskMeterKind(t: Task) {
+  return t.meterKind ?? resolveMeterKind({ machineryUnitId: t.machineryUnitId, vehiclePlate: t.vehiclePlate });
+}
 
 export default function EmployeeSchedulePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -29,6 +36,7 @@ export default function EmployeeSchedulePage() {
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<Task | null>(null);
   const [notes, setNotes] = useState("");
+  const [meterReading, setMeterReading] = useState("");
   const [media, setMedia] = useState<StoredMediaRef[]>([]);
   const [done, setDone] = useState(false);
   const [msg, setMsg] = useState("");
@@ -76,6 +84,7 @@ export default function EmployeeSchedulePage() {
     if (media.length > 0) await deleteStoragePaths(media.map((m) => m.path));
     setActive(null);
     setNotes("");
+    setMeterReading("");
     setMedia([]);
     setMsg("");
   };
@@ -83,6 +92,11 @@ export default function EmployeeSchedulePage() {
   const finishWork = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!active) return;
+    const kind = taskMeterKind(active);
+    if (kind && (!meterReading.trim() || Number(meterReading) < 0)) {
+      setMsg(kind === "engine_hours" ? "יש למלא שעות מנוע נוכחיות" : "יש למלא קילומטרים נוכחיים");
+      return;
+    }
     setBusy(true);
     setMsg("");
     try {
@@ -94,6 +108,7 @@ export default function EmployeeSchedulePage() {
           action: "complete",
           actualNotes: notes,
           media,
+          ...(kind ? { meterReading: Number(meterReading) } : {}),
         }),
       });
       const data = await res.json();
@@ -104,6 +119,7 @@ export default function EmployeeSchedulePage() {
       setDone(true);
       setActive(null);
       setNotes("");
+      setMeterReading("");
       setMedia([]);
       await load();
     } finally {
@@ -143,8 +159,26 @@ export default function EmployeeSchedulePage() {
               <MapPin className="h-4 w-4" />
               {active.settlement || "—"}
             </p>
-            <p className="text-sm">{active.workType || active.plotName || "עבודה"}</p>
+            <p className="text-sm">{active.material || active.plot || active.plotName || "עבודה"}</p>
           </div>
+
+          {taskMeterKind(active) && (
+            <div>
+              <label className="block text-sm font-bold mb-1">
+                {meterKindLabel(taskMeterKind(active))} <span className="text-danger">*</span>
+              </label>
+              <input
+                type="number"
+                required
+                min={0}
+                step="0.1"
+                value={meterReading}
+                onChange={(e) => setMeterReading(e.target.value)}
+                className="field-input text-lg font-bold"
+                placeholder={taskMeterKind(active) === "engine_hours" ? "שעות מנוע" : "קילומטרים"}
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-bold mb-1">הערות</label>
@@ -222,6 +256,7 @@ export default function EmployeeSchedulePage() {
                   onClick={() => {
                     setActive(t);
                     setNotes("");
+                    setMeterReading("");
                     setMedia([]);
                   }}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-white font-extrabold"

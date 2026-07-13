@@ -27,10 +27,11 @@ type Lookup = {
   vehicles: { id: string; licensePlate: string; make: string | null; model: string | null }[];
 };
 
-type Mode = "vehicle" | "employee" | "external" | "tank_fill";
+type Mode = "vehicle" | "external" | "tank_fill";
 
 export default function MobileFuelPage() {
   const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [operatorName, setOperatorName] = useState("");
   const [meterPhotoUrl, setMeterPhotoUrl] = useState<string | null>(null);
   const [saved, setSaved] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,7 +40,6 @@ export default function MobileFuelPage() {
     recipientId: "",
     vehicleId: "",
     licensePlate: "",
-    driverName: "",
     sourceId: "",
     liters: "",
     odometerKm: "",
@@ -48,12 +48,16 @@ export default function MobileFuelPage() {
   });
 
   useEffect(() => {
-    fetch("/api/lookup").then((r) => r.json()).then(setLookup);
+    Promise.all([fetch("/api/lookup").then((r) => r.json()), fetch("/api/auth/me").then((r) => r.json())]).then(
+      ([lookupData, me]) => {
+        setLookup(lookupData);
+        if (me?.firstName) setOperatorName(`${me.firstName} ${me.lastName || ""}`.trim());
+      }
+    );
   }, []);
 
   const recipients = lookup?.fuelRecipients || [];
-  const vehicles = recipients.filter((r) => r.category === "COMPANY_VEHICLE" || r.category === "COMPANY_EMPLOYEE");
-  const employees = recipients.filter((r) => r.category === "COMPANY_EMPLOYEE");
+  const vehicles = recipients.filter((r) => r.category === "COMPANY_VEHICLE");
   const external = recipients.filter((r) => r.category === "EXTERNAL_CUSTOMER");
   const tanks = (lookup?.fuelSources || []).filter((s) => s.sourceType === "FIXED_TANK" || s.sourceType === "FIELD_CART");
 
@@ -69,8 +73,6 @@ export default function MobileFuelPage() {
       recipientId: isFill ? null : form.recipientId || null,
       vehicleId: form.vehicleId || selectedRecipient?.vehicleId || null,
       licensePlate: form.licensePlate || selectedRecipient?.vehicle?.licensePlate || null,
-      operatorId: null,
-      driverName: form.driverName || null,
       sourceId: isFill ? null : form.sourceId,
       fuelSourceId: isFill ? form.tankSourceId : undefined,
       liters: Number(form.liters),
@@ -121,7 +123,7 @@ export default function MobileFuelPage() {
 
   if (saved) {
     const msg = formatFuelWhatsApp({
-      operator: form.driverName || selectedRecipient?.name || "",
+      operator: operatorName || selectedRecipient?.name || "",
       vehicle: form.licensePlate || selectedRecipient?.name || "",
       liters: Number(form.liters),
       source: lookup.fuelSources.find((s) => s.id === form.sourceId || s.id === form.tankSourceId)?.name || "",
@@ -150,14 +152,13 @@ export default function MobileFuelPage() {
   }
 
   return (
-    <EmployeeShell title="דיווח דלק" subtitle="רכב · נהג · מונה · מקור · ליטרים">
+    <EmployeeShell title="דיווח תדלוק" subtitle="רכב חברה · קבלן · מילוי מיכל">
       <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {(
             [
               ["vehicle", "רכב חברה"],
-              ["employee", "עובד חברה"],
-              ["external", "קבלן חיצוני"],
+              ["external", "רכב קבלן"],
               ["tank_fill", "מילוי מיכל"],
             ] as const
           ).map(([k, label]) => (
@@ -194,7 +195,7 @@ export default function MobileFuelPage() {
             </select>
           </Field>
         ) : (
-          <Field label={mode === "external" ? "קבלן / לקוח חיצוני" : mode === "employee" ? "עובד" : "רכב"} required>
+          <Field label={mode === "external" ? "קבלן / לקוח חיצוני" : "רכב חברה"} required>
             <select
               required
               value={form.recipientId}
@@ -210,7 +211,7 @@ export default function MobileFuelPage() {
               className="field-input"
             >
               <option value="">בחר...</option>
-              {(mode === "vehicle" ? vehicles : mode === "employee" ? employees : external).map((r) => (
+              {(mode === "vehicle" ? vehicles : external).map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                   {r.pricePerLiter ? ` · ₪${Number(r.pricePerLiter)}/ל׳` : ""}
@@ -233,20 +234,6 @@ export default function MobileFuelPage() {
               <datalist id="plates">
                 {(lookup.vehicles || []).map((v) => (
                   <option key={v.id} value={v.licensePlate} />
-                ))}
-              </datalist>
-            </Field>
-            <Field label="שם נהג">
-              <input
-                value={form.driverName}
-                onChange={(e) => setForm({ ...form, driverName: e.target.value })}
-                className="field-input"
-                placeholder="הקלד שם נהג"
-                list="drivers"
-              />
-              <datalist id="drivers">
-                {lookup.employees.map((e) => (
-                  <option key={e.id} value={`${e.firstName} ${e.lastName}`} />
                 ))}
               </datalist>
             </Field>

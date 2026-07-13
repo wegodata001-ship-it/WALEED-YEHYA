@@ -30,6 +30,7 @@ type Lookup = {
 
 export default function MobileMachineryPage() {
   const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [operatorName, setOperatorName] = useState("");
   const [lookupError, setLookupError] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [saved, setSaved] = useState<Record<string, unknown> | null>(null);
@@ -39,7 +40,6 @@ export default function MobileMachineryPage() {
   const [unitForm, setUnitForm] = useState({ name: "", unitType: "HARVESTER", unitNumber: "" });
   const [form, setForm] = useState({
     machineryUnitId: "",
-    driverName: "",
     settlement: "",
     customerName: "",
     plotName: "",
@@ -63,6 +63,12 @@ export default function MobileMachineryPage() {
 
   useEffect(() => {
     loadLookup();
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((me) => {
+        if (me?.firstName) setOperatorName(`${me.firstName} ${me.lastName || ""}`.trim());
+      })
+      .catch(() => {});
   }, []);
 
   const addUnit = async (e: React.FormEvent) => {
@@ -109,7 +115,6 @@ export default function MobileMachineryPage() {
     setLoading(true);
     const payload = {
       machineryUnitId: form.machineryUnitId,
-      driverName: form.driverName || null,
       settlement: form.settlement,
       customerName: form.customerName,
       plotName: form.plotName || null,
@@ -164,7 +169,7 @@ export default function MobileMachineryPage() {
 
   if (saved) {
     const msg = formatMachineryWhatsApp({
-      operator: form.driverName || selectedUnit?.name || "",
+      operator: operatorName || selectedUnit?.name || "",
       vehicle: selectedUnit?.name || "",
       plot: form.plotName || form.settlement,
       material: form.materialType ? MATERIAL_LABELS[form.materialType] : "—",
@@ -191,7 +196,7 @@ export default function MobileMachineryPage() {
   }
 
   return (
-    <EmployeeShell title="יומן עבודה" subtitle="מכונה · נהג · ישוב · לקוח · חלקה · כמות">
+    <EmployeeShell title="יומן עבודה" subtitle="מכונה · ישוב · לקוח · חלקה · כמות">
       <form onSubmit={submit} className="space-y-4">
         <PhotoCapture onCapture={setPhotoUrl} photoUrl={photoUrl} label="צילום מהשטח (אופציונלי)" />
 
@@ -295,23 +300,6 @@ export default function MobileMachineryPage() {
             </button>
           </div>
         )}
-
-        <Field label="נהג" required>
-          <input
-            required
-            value={form.driverName}
-            onChange={(e) => setForm({ ...form, driverName: e.target.value })}
-            className="field-input"
-            placeholder="הקלד שם חדש או בחר מהרשימה"
-            list="drivers-list"
-          />
-          <datalist id="drivers-list">
-            {lookup.employees.map((e) => (
-              <option key={e.id} value={`${e.firstName} ${e.lastName}`} />
-            ))}
-          </datalist>
-          <p className="text-[11px] text-muted mt-1">אפשר להקליד נהג חדש ישירות</p>
-        </Field>
 
         <Field label="ישוב" required>
           <input

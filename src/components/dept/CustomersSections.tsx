@@ -1,6 +1,7 @@
 "use client";
 
-import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
+import { buildFieldTaskDetailFields } from "@/components/dept/field-task-fields";
+import { quantityUnitDisplayLabel, QUANTITY_UNIT_LABELS } from "@/lib/constants";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
 import type { ClientRow, DayRow, FarmerRow, FieldTaskRow } from "@/components/dept/types";
@@ -139,18 +140,17 @@ export function CustomersCardSection({
               title={t.customerName || "לקוח"}
               subtitle={`${t.assignee.firstName} ${t.assignee.lastName}`}
               fields={[
-                { label: "ישוב", value: t.settlement || "—" },
-                { label: "חלקה", value: t.plotName || "—" },
+                ...buildFieldTaskDetailFields(t, { includeQuantities: false }),
                 {
                   label: "תוכנן",
-                  value: `${t.plannedQuantity} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
+                  value: `${t.plannedQuantity} ${t.quantityUnitLabel || quantityUnitDisplayLabel(t.quantityUnit, t.unitLabel)}`,
                 },
                 {
                   label: "דווח",
-                  value: `${t.reportedQuantity ?? "—"} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
+                  value: `${t.reportedQuantity ?? "—"} ${t.quantityUnitLabel || quantityUnitDisplayLabel(t.quantityUnit, t.unitLabel)}`,
                 },
               ]}
-              notes={t.employeeNotes || t.actualNotes}
+              notes={t.employeeNotes || undefined}
               footer={
                 <>
                   <div className="px-4 pb-2">

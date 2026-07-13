@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, LogOut, Play, Clock, History } from "lucide-react";
+import { getCurrentPosition } from "@/lib/geolocation";
 import { EmployeeShell } from "@/components/EmployeeShell";
 
 type OpenShift = {
@@ -66,10 +67,17 @@ export default function EmployeeAttendancePage() {
     setBusy(true);
     setMsg("");
     try {
+      let gps: { lat: number; lng: number };
+      try {
+        gps = await getCurrentPosition();
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "לא ניתן לקבל מיקום GPS");
+        return;
+      }
       const res = await fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "check_in" }),
+        body: JSON.stringify({ action: "check_in", gpsLat: gps.lat, gpsLng: gps.lng }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -87,10 +95,17 @@ export default function EmployeeAttendancePage() {
     setBusy(true);
     setMsg("");
     try {
+      let gps: { lat: number; lng: number };
+      try {
+        gps = await getCurrentPosition();
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "לא ניתן לקבל מיקום GPS");
+        return;
+      }
       const res = await fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "check_out" }),
+        body: JSON.stringify({ action: "check_out", gpsLat: gps.lat, gpsLng: gps.lng }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -127,7 +142,7 @@ export default function EmployeeAttendancePage() {
           <div className="text-center space-y-6 py-8">
             <div className="rounded-2xl border-2 border-dashed border-border bg-card p-8">
               <Clock className="h-12 w-12 text-muted mx-auto mb-4" />
-              <p className="text-muted text-sm mb-6">לחץ כדי להתחיל את יום העבודה</p>
+              <p className="text-muted text-sm mb-6">לחץ כדי להתחיל את יום העבודה — יישמר מיקום GPS</p>
               <button
                 type="button"
                 disabled={busy}

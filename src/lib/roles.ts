@@ -8,20 +8,20 @@ export function isManagerRole(role: string) {
   return isOwnerRole(role);
 }
 
+/** Field employees — WAREHOUSE_MANAGER kept for legacy sessions, same access as FIELD_OPERATOR */
 export function isEmployeeRole(role: string) {
   return role === "FIELD_OPERATOR" || role === "WAREHOUSE_MANAGER";
 }
 
 export function isFieldRole(role: string) {
-  return role === "FIELD_OPERATOR";
+  return role === "FIELD_OPERATOR" || role === "WAREHOUSE_MANAGER";
 }
 
 export function isWarehouseRole(role: string) {
   return role === "WAREHOUSE_MANAGER";
 }
 
-export function defaultPathForRole(role: string) {
-  if (isWarehouseRole(role)) return "/employee/fuel";
-  if (isFieldRole(role)) return "/employee";
+export function defaultPathForRole(_role: string) {
+  if (isFieldRole(_role)) return "/employee";
   return "/";
 }

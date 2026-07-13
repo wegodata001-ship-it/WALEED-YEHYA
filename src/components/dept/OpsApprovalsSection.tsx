@@ -1,9 +1,10 @@
 "use client";
 
-import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
-import { MediaGallery } from "@/components/storage/MediaGallery";
+import { buildFieldTaskDetailFields } from "@/components/dept/field-task-fields";
+import { mapsLink } from "@/lib/geolocation";
+import { quantityUnitDisplayLabel } from "@/lib/constants";
 import type { FieldTaskRow } from "@/components/dept/types";
 
 export function OpsApprovalsSection({
@@ -28,7 +29,11 @@ export function OpsApprovalsSection({
     employee: { firstName: string; lastName: string };
     workDate: string;
     checkIn: string | null;
-    photoUrl: string | null;
+    checkOut: string | null;
+    gpsLat: number | null;
+    gpsLng: number | null;
+    checkOutGps?: { lat: number; lng: number } | null;
+    photoUrl?: string | null;
   }[];
   adjustQty: Record<string, string>;
   setAdjustQty: (v: Record<string, string>) => void;
@@ -38,9 +43,9 @@ export function OpsApprovalsSection({
   return (
     <div className="space-y-5">
       <section className="space-y-2">
-        <h3 className="text-sm font-extrabold text-primary-dark">אימות נוכחות — צילומי כניסה</h3>
+        <h3 className="text-sm font-extrabold text-primary-dark">נוכחות — מיקומי GPS</h3>
         {verifiedAttendance.length === 0 ? (
-          <p className="text-sm text-muted">אין רישומי כניסה עם תמונה בטווח שנבחר</p>
+          <p className="text-sm text-muted">אין רישומי נוכחות עם GPS בטווח שנבחר</p>
         ) : (
           <div className="work-card-grid">
             {verifiedAttendance.map((r) => (
@@ -53,14 +58,53 @@ export function OpsApprovalsSection({
                     ? `כניסה ${new Date(r.checkIn).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`
                     : "כניסה"
                 }
-                fields={[{ label: "אימות", value: r.photoUrl ? "תמונה צורפה" : "ללא תמונה" }]}
-                footer={
-                  r.photoUrl ? (
-                    <div className="px-4 pb-3">
-                      <MediaGallery legacyUrls={[r.photoUrl]} />
-                    </div>
-                  ) : undefined
-                }
+                fields={[
+                  ...(r.gpsLat != null && r.gpsLng != null
+                    ? [
+                        {
+                          label: "GPS כניסה",
+                          value: (
+                            <a
+                              href={mapsLink(r.gpsLat, r.gpsLng)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              צפה במפה
+                            </a>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(r.checkOutGps
+                    ? [
+                        {
+                          label: "GPS יציאה",
+                          value: (
+                            <a
+                              href={mapsLink(r.checkOutGps.lat, r.checkOutGps.lng)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              צפה במפה
+                            </a>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(r.checkOut
+                    ? [
+                        {
+                          label: "יציאה",
+                          value: new Date(r.checkOut).toLocaleTimeString("he-IL", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                        },
+                      ]
+                    : []),
+                ]}
               />
             ))}
           </div>
@@ -80,10 +124,7 @@ export function OpsApprovalsSection({
                 title={t.customerName || "לקוח"}
                 subtitle={`${t.assignee.firstName} ${t.assignee.lastName}`}
                 fields={[
-                  { label: "ישוב", value: t.settlement || "—" },
-                  { label: "סוג עבודה", value: t.workType || t.plotName || "—" },
-                  { label: "רכב", value: t.vehiclePlate || "—" },
-                  { label: "מכונה", value: t.machineryUnit?.name || "—" },
+                  ...buildFieldTaskDetailFields(t, { includeQuantities: false }),
                   ...(t.startedAt
                     ? [{ label: "התחיל", value: new Date(t.startedAt).toLocaleString("he-IL") }]
                     : []),
@@ -92,43 +133,43 @@ export function OpsApprovalsSection({
                     : []),
                   {
                     label: "תוכנן",
-                    value: `${t.plannedQuantity} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
+                    value: `${t.plannedQuantity} ${t.quantityUnitLabel || quantityUnitDisplayLabel(t.quantityUnit, t.unitLabel)}`,
                   },
                   {
                     label: "דווח",
-                    value: `${t.reportedQuantity ?? "—"} ${QUANTITY_UNIT_LABELS[t.quantityUnit] || ""}`,
+                    value: `${t.reportedQuantity ?? "—"} ${t.quantityUnitLabel || quantityUnitDisplayLabel(t.quantityUnit, t.unitLabel)}`,
                   },
                 ]}
-                notes={t.employeeNotes || t.actualNotes}
+                notes={t.employeeNotes || undefined}
                 footer={
                   <>
                     <div className="px-4 pb-2">
                       <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} />
                     </div>
                     <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
-                    <button
-                      type="button"
-                      onClick={() => onApproveTask(t.id, t.reportedQuantity ?? undefined)}
-                      className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white"
-                    >
-                      אשר דיווח
-                    </button>
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="כמות סופית"
-                      value={adjustQty[t.id] || ""}
-                      onChange={(e) => setAdjustQty({ ...adjustQty, [t.id]: e.target.value })}
-                      className="w-28 rounded border border-border px-2 py-1 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onApproveTask(t.id, Number(adjustQty[t.id] || t.plannedQuantity))}
-                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"
-                    >
-                      עדכן ואשר
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => onApproveTask(t.id, t.reportedQuantity ?? undefined)}
+                        className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white"
+                      >
+                        אשר דיווח
+                      </button>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="כמות סופית"
+                        value={adjustQty[t.id] || ""}
+                        onChange={(e) => setAdjustQty({ ...adjustQty, [t.id]: e.target.value })}
+                        className="w-28 rounded border border-border px-2 py-1 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onApproveTask(t.id, Number(adjustQty[t.id] || t.plannedQuantity))}
+                        className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"
+                      >
+                        עדכן ואשר
+                      </button>
+                    </div>
                   </>
                 }
               />

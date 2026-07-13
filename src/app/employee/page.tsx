@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CalendarDays, Clock, FileText, History, LogOut, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock, FileText, Fuel, History, LogOut, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type User = { firstName: string; lastName: string; role: string; employeeId?: string | null };
@@ -44,6 +44,13 @@ export default function EmployeeHomePage() {
       href: "/employee/history",
       color: "bg-[#2d6a4f]",
       desc: "כל העבודות שביצעת",
+    },
+    {
+      title: "דיווח תדלוק",
+      icon: Fuel,
+      href: "/employee/fuel",
+      color: "bg-[#8b4513]",
+      desc: "רכב חברה, קבלן או מילוי מיכל",
     },
     {
       title: "הנוכחות שלי",

@@ -4,6 +4,7 @@ import { getDefaultOrg } from "@/lib/org";
 import { parseDateRange } from "@/lib/dateRange";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 import { isEmployeeRole } from "@/lib/roles";
+import { parseAttendanceGpsMeta, serializeAttendanceGpsMeta, attendancePlainNotes } from "@/lib/attendance-gps";
 
 export async function GET(req: NextRequest) {
   try {
@@ -62,7 +63,10 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    records,
+    records: records.map((r) => ({
+      ...r,
+      checkOutGps: parseAttendanceGpsMeta(r.notes).checkOutGps || null,
+    })),
     openToday,
     summary: {
       year,
@@ -103,6 +107,12 @@ export async function POST(req: NextRequest) {
     todayEnd.setDate(todayEnd.getDate() + 1);
 
     if (action === "check_in") {
+      const lat = body.gpsLat != null ? Number(body.gpsLat) : null;
+      const lng = body.gpsLng != null ? Number(body.gpsLng) : null;
+      if (isEmployeeRole(user.role) && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
+        return NextResponse.json({ error: "נדרש מיקום GPS לכניסה" }, { status: 400 });
+      }
+
       const existing = await prisma.attendanceRecord.findFirst({
         where: {
           organizationId: org.id,
@@ -121,6 +131,8 @@ export async function POST(req: NextRequest) {
           workDate: todayStart,
           status: "PRESENT",
           checkIn: new Date(),
+          gpsLat: lat,
+          gpsLng: lng,
           photoUrl: typeof body.photoUrl === "string" && body.photoUrl.trim() ? body.photoUrl.trim() : null,
           createdById: user.id,
           syncStatus: "SYNCED",
@@ -132,6 +144,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "check_out") {
+      const lat = body.gpsLat != null ? Number(body.gpsLat) : null;
+      const lng = body.gpsLng != null ? Number(body.gpsLng) : null;
+      if (isEmployeeRole(user.role) && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
+        return NextResponse.json({ error: "נדרש מיקום GPS ליציאה" }, { status: 400 });
+      }
+
       const open = await prisma.attendanceRecord.findFirst({
         where: {
           organizationId: org.id,
@@ -147,10 +165,15 @@ export async function POST(req: NextRequest) {
       }
       const checkOut = new Date();
       const hours = (checkOut.getTime() - (open.checkIn?.getTime() || checkOut.getTime())) / 3600000;
+      const notes = serializeAttendanceGpsMeta(
+        { checkOutGps: lat != null && lng != null ? { lat, lng } : undefined },
+        attendancePlainNotes(open.notes)
+      );
       const record = await prisma.attendanceRecord.update({
         where: { id: open.id },
         data: {
           checkOut,
+          notes,
           timeEntries: {
             create: [{ entryType: "REGULAR", hours: Math.round(hours * 100) / 100 }],
           },

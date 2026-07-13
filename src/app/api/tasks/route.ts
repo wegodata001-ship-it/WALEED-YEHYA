@@ -5,13 +5,17 @@ import { parseDateRange } from "@/lib/dateRange";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 import { isEmployeeRole, isManagerRole } from "@/lib/roles";
 import {
-  encodeVehicleInDescription,
+  encodeTaskDescription,
   getTaskMedia,
   parseSessionMeta,
   parseVehicleFromDescription,
+  parseUnitLabelFromDescription,
+  resolveMeterKind,
+  resolveTaskDisplayFields,
   serializeSessionMeta,
-  stripVehicleFromDescription,
+  stripTaskTags,
 } from "@/lib/field-task-utils";
+import { quantityUnitDisplayLabel, parseScheduleQuantityUnit } from "@/lib/constants";
 
 function serializeTask(t: {
   id: string;
@@ -34,14 +38,23 @@ function serializeTask(t: {
 }) {
   const session = parseSessionMeta(t.actualNotes);
   const media = getTaskMedia(session);
+  const vehiclePlate = parseVehicleFromDescription(t.taskDescription);
+  const display = resolveTaskDisplayFields(t);
+  const unitLabel = display.unitLabel ?? parseUnitLabelFromDescription(t.taskDescription);
   return {
     ...t,
     plannedQuantity: Number(t.plannedQuantity),
     reportedQuantity: t.reportedQuantity != null ? Number(t.reportedQuantity) : null,
-    vehiclePlate: parseVehicleFromDescription(t.taskDescription),
-    managerNotes: stripVehicleFromDescription(t.taskDescription),
-    workType: t.plotName,
+    vehiclePlate,
+    managerNotes: stripTaskTags(t.taskDescription),
+    material: display.material,
+    plot: display.plot,
+    unitLabel,
+    quantityUnitLabel: quantityUnitDisplayLabel(t.quantityUnit, unitLabel),
+    workType: display.workType,
     session,
+    meterReading: session.meterReading ?? null,
+    meterKind: session.meterKind ?? resolveMeterKind({ machineryUnitId: t.machineryUnitId, vehiclePlate }),
     employeeNotes: session.employeeNotes || (t.status === "COMPLETED" && !session.startedAt ? t.actualNotes : null),
     media,
     photoUrls: session.photoUrls || media.map((m) => m.path),
@@ -107,6 +120,14 @@ export async function POST(req: NextRequest) {
       workDate.setHours(h, m, 0, 0);
     }
 
+    if (!body.customerName?.trim()) {
+      return NextResponse.json({ error: "חובה למלא לקוח" }, { status: 400 });
+    }
+
+    const qtyParsed = body.quantityUnitUi
+      ? parseScheduleQuantityUnit(body.quantityUnitUi)
+      : { quantityUnit: body.quantityUnit || "DUNAM", unitLabel: body.unitLabel };
+
     const task = await prisma.fieldTask.create({
       data: {
         organizationId: org.id,
@@ -114,11 +135,16 @@ export async function POST(req: NextRequest) {
         workDate,
         machineryUnitId: body.machineryUnitId || null,
         settlement: body.settlement || body.address || null,
-        customerName: body.customerName || null,
-        plotName: body.workType || body.plotName || null,
+        customerName: body.customerName.trim(),
+        plotName: body.plotName || body.plot || body.workType || null,
         plannedQuantity: Number(body.plannedQuantity ?? 1),
-        quantityUnit: body.quantityUnit || "DUNAM",
-        taskDescription: encodeVehicleInDescription(body.vehiclePlate, body.taskDescription || body.notes || null),
+        quantityUnit: qtyParsed.quantityUnit || "DUNAM",
+        taskDescription: encodeTaskDescription({
+          vehiclePlate: body.vehiclePlate,
+          material: body.material,
+          unitLabel: qtyParsed.unitLabel,
+          notes: body.taskDescription || body.notes || null,
+        }),
         status: "ASSIGNED",
         approvalStatus: "PENDING",
         createdById: user.id,
@@ -185,6 +211,19 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (body.action === "complete") {
+      const vehiclePlate = parseVehicleFromDescription(task.taskDescription);
+      const meterKind = resolveMeterKind({ machineryUnitId: task.machineryUnitId, vehiclePlate });
+      let meterReading: number | undefined;
+      if (meterKind) {
+        meterReading = body.meterReading != null ? Number(body.meterReading) : NaN;
+        if (!Number.isFinite(meterReading) || meterReading < 0) {
+          return NextResponse.json(
+            { error: meterKind === "engine_hours" ? "יש למלא שעות מנוע נוכחיות" : "יש למלא קילומטרים נוכחיים" },
+            { status: 400 }
+          );
+        }
+      }
+
       const reported = body.reportedQuantity != null ? Number(body.reportedQuantity) : Number(task.plannedQuantity);
       const existing = parseSessionMeta(task.actualNotes);
       const media = Array.isArray(body.media)
@@ -212,6 +251,7 @@ export async function PATCH(req: NextRequest) {
         media: media.length > 0 ? media : undefined,
         photoUrls: media.length === 0 && legacyPhotoUrls.length > 0 ? legacyPhotoUrls : undefined,
         employeeNotes: body.actualNotes || body.employeeNotes || null,
+        ...(meterKind && meterReading != null ? { meterReading, meterKind } : {}),
       });
 
       const hasMedia = media.length > 0 || legacyPhotoUrls.length > 0;
@@ -249,7 +289,7 @@ export async function PATCH(req: NextRequest) {
           plannedQuantity: Number(task.plannedQuantity),
           reportedQuantity: reported,
           approvalStatus: needsReview ? "PENDING" : "APPROVED",
-          notes: body.actualNotes || stripVehicleFromDescription(task.taskDescription) || task.taskDescription,
+          notes: body.actualNotes || stripTaskTags(task.taskDescription) || task.taskDescription,
           createdById: user.id,
           syncStatus: "SYNCED",
         },

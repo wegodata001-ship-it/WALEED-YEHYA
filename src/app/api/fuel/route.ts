@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getCurrentUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
 import { FuelTransactionType, LedgerCategory, LedgerEntryType } from "@prisma/client";
 import { parseDateRange } from "@/lib/dateRange";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
@@ -49,10 +49,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAuthUser();
+    const user = await requireAuthUser();
     const body = await req.json();
     const org = await getDefaultOrg();
-    const user = await getCurrentUser();
 
     const liters = Number(body.liters);
 
@@ -99,9 +98,9 @@ export async function POST(req: NextRequest) {
           pricePerLiter,
           totalCost,
           odometerKm: body.odometerKm ? Number(body.odometerKm) : null,
-          operatorId: body.operatorId || null,
+          operatorId: body.operatorId || user.employeeId || null,
           subcontractorId: subcontractorId || null,
-          notes: [body.notes, body.driverName ? `נהג: ${body.driverName}` : null].filter(Boolean).join(" · ") || null,
+          notes: body.notes || null,
           gpsLat: body.gpsLat ?? null,
           gpsLng: body.gpsLng ?? null,
           photoUrl: body.photoUrl || null,

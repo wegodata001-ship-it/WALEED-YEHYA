@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getDefaultOrg, getCurrentUser } from "@/lib/org";
+import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
+import { isEmployeeRole } from "@/lib/roles";
 
 export async function GET(req: NextRequest) {
   try {
@@ -47,10 +48,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAuthUser();
+    const sessionUser = await requireAuthUser();
     const body = await req.json();
     const org = await getDefaultOrg();
-    const user = await getCurrentUser();
+
+    let operatorId = body.operatorId || null;
+    let driverName = body.driverName || null;
+    if (isEmployeeRole(sessionUser.role)) {
+      if (!sessionUser.employeeId) throw new ApiAuthError(403, "אין הרשאה");
+      operatorId = sessionUser.employeeId;
+      driverName = sessionUser.employee
+        ? `${sessionUser.employee.firstName} ${sessionUser.employee.lastName}`
+        : `${sessionUser.firstName} ${sessionUser.lastName}`;
+    }
 
     const unit = body.machineryUnitId
       ? await prisma.machineryUnit.findUnique({
@@ -65,8 +75,8 @@ export async function POST(req: NextRequest) {
         clientId: body.clientId || null,
         machineryUnitId: body.machineryUnitId || null,
         workDate: new Date(body.workDate || new Date()),
-        operatorId: body.operatorId || null,
-        driverName: body.driverName || null,
+        operatorId,
+        driverName,
         vehicleId: body.vehicleId || unit?.vehicleId || null,
         plotId: body.plotId || null,
         plotName: body.plotName || null,
@@ -85,7 +95,7 @@ export async function POST(req: NextRequest) {
         gpsLng: body.gpsLng ?? null,
         photoUrl: body.photoUrl || null,
         whatsappShared: body.whatsappShared || false,
-        createdById: user.id,
+        createdById: sessionUser.id,
         syncStatus: "SYNCED",
       },
       include: { operator: true, vehicle: true, plot: true, machineryUnit: true },
@@ -94,7 +104,7 @@ export async function POST(req: NextRequest) {
     await prisma.auditLog.create({
       data: {
         organizationId: org.id,
-        userId: user.id,
+        userId: sessionUser.id,
         entityType: "MachineryWorkLog",
         entityId: log.id,
         action: "CREATE",

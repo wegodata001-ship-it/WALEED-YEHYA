@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Clock, FileText, History, UserRound } from "lucide-react";
+import { CalendarDays, Clock, Fuel, History, UserRound } from "lucide-react";
 
 const NAV = [
   { href: "/employee/schedule", label: "סידור", icon: CalendarDays },
   { href: "/employee/history", label: "היסטוריה", icon: History },
+  { href: "/employee/fuel", label: "תדלוק", icon: Fuel },
   { href: "/employee/attendance", label: "נוכחות", icon: Clock },
-  { href: "/employee/reports", label: "דיווחים", icon: FileText },
   { href: "/employee/profile", label: "פרופיל", icon: UserRound },
 ];
 

@@ -7,6 +7,8 @@ import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { dateRangeQuery, defaultDateRange, type DateRangeState } from "@/lib/dateRange";
 import { TASK_STATUS_LABELS, formatTaskDate, formatTaskTime } from "@/lib/field-task-utils";
 import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
+import { buildFieldTaskDetailFields } from "@/components/dept/field-task-fields";
+import { SCHEDULE_MATERIAL_SUGGESTIONS, SCHEDULE_QUANTITY_UNITS } from "@/lib/constants";
 import type { FieldTaskRow } from "@/components/dept/types";
 
 type Lookup = {
@@ -16,14 +18,17 @@ type Lookup = {
 };
 
 const emptyForm = () => ({
-  workDate: new Date().toISOString().slice(0, 10),
-  workTime: "08:00",
   customerName: "",
   settlement: "",
-  workType: "",
+  plotName: "",
+  material: "",
+  plannedQuantity: "1",
+  quantityUnitUi: "DUNAM",
   vehiclePlate: "",
   machineryUnitId: "",
   assigneeId: "",
+  workDate: new Date().toISOString().slice(0, 10),
+  workTime: "08:00",
   notes: "",
 });
 
@@ -89,16 +94,18 @@ export function WorkScheduleSection() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workDate: form.workDate,
-          workTime: form.workTime,
           customerName: form.customerName.trim(),
           settlement: form.settlement.trim() || null,
-          workType: form.workType.trim() || null,
+          plotName: form.plotName.trim() || null,
+          material: form.material.trim() || null,
+          plannedQuantity: Number(form.plannedQuantity || 1),
+          quantityUnitUi: form.quantityUnitUi,
           vehiclePlate: form.vehiclePlate || null,
           machineryUnitId: form.machineryUnitId || null,
           assigneeId: form.assigneeId,
+          workDate: form.workDate,
+          workTime: form.workTime,
           notes: form.notes.trim() || null,
-          plannedQuantity: 1,
         }),
       });
       const data = await res.json();
@@ -161,10 +168,7 @@ export function WorkScheduleSection() {
               title={t.customerName || "לקוח"}
               subtitle={`${t.assignee.firstName} ${t.assignee.lastName} · ${TASK_STATUS_LABELS[t.status] || t.status}`}
               fields={[
-                { label: "כתובת", value: t.settlement || "—" },
-                { label: "סוג עבודה", value: t.workType || t.plotName || "—" },
-                { label: "רכב", value: t.vehiclePlate || "—" },
-                { label: "מכונה", value: t.machineryUnit?.name || "—" },
+                ...buildFieldTaskDetailFields(t),
                 ...(t.startedAt
                   ? [{ label: "התחיל", value: new Date(t.startedAt).toLocaleString("he-IL") }]
                   : []),
@@ -193,35 +197,51 @@ export function WorkScheduleSection() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold mb-1">תאריך *</label>
-                <input type="date" required value={form.workDate} onChange={(e) => setForm({ ...form, workDate: e.target.value })} className="field-input" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold mb-1">שעה *</label>
-                <input type="time" required value={form.workTime} onChange={(e) => setForm({ ...form, workTime: e.target.value })} className="field-input" />
-              </div>
-            </div>
-
             <div>
               <label className="block text-xs font-bold mb-1">לקוח *</label>
               <input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} className="field-input" placeholder="למשל: משק כהן" required />
             </div>
 
             <div>
-              <label className="block text-xs font-bold mb-1">כתובת / ישוב</label>
+              <label className="block text-xs font-bold mb-1">ישוב</label>
               <input value={form.settlement} onChange={(e) => setForm({ ...form, settlement: e.target.value })} className="field-input" placeholder="למשל: אשקלון" />
             </div>
 
             <div>
-              <label className="block text-xs font-bold mb-1">סוג עבודה</label>
-              <input value={form.workType} onChange={(e) => setForm({ ...form, workType: e.target.value })} className="field-input" placeholder="למשל: ריסוס" />
+              <label className="block text-xs font-bold mb-1">חלקה</label>
+              <input value={form.plotName} onChange={(e) => setForm({ ...form, plotName: e.target.value })} className="field-input" placeholder="מספר / שם חלקה" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1">חומר</label>
+              <input value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })} className="field-input" placeholder="דשן, חומר ריסוס..." list="material-suggestions" />
+              <datalist id="material-suggestions">
+                {SCHEDULE_MATERIAL_SUGGESTIONS.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold mb-1">רכב</label>
+                <label className="block text-xs font-bold mb-1">כמות</label>
+                <input type="number" step="0.1" min="0" value={form.plannedQuantity} onChange={(e) => setForm({ ...form, plannedQuantity: e.target.value })} className="field-input" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">יחידת מידה</label>
+                <select value={form.quantityUnitUi} onChange={(e) => setForm({ ...form, quantityUnitUi: e.target.value })} className="field-input">
+                  {SCHEDULE_QUANTITY_UNITS.map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">כלי רכב</label>
                 <select value={form.vehiclePlate} onChange={(e) => setForm({ ...form, vehiclePlate: e.target.value })} className="field-input">
                   <option value="">ללא</option>
                   {lookup.vehicles.map((v) => (
@@ -245,7 +265,7 @@ export function WorkScheduleSection() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold mb-1">שייך לעובד *</label>
+              <label className="block text-xs font-bold mb-1">עובד *</label>
               <select required value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })} className="field-input">
                 <option value="">בחר עובד</option>
                 {lookup.employees.map((e) => (
@@ -254,6 +274,17 @@ export function WorkScheduleSection() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">תאריך *</label>
+                <input type="date" required value={form.workDate} onChange={(e) => setForm({ ...form, workDate: e.target.value })} className="field-input" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">שעה *</label>
+                <input type="time" required value={form.workTime} onChange={(e) => setForm({ ...form, workTime: e.target.value })} className="field-input" />
+              </div>
             </div>
 
             <div>

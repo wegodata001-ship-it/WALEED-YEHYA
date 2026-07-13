@@ -87,8 +87,7 @@ export function HrPageClient() {
             <input required placeholder="טלפון (050...)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="field-input" dir="ltr" />
             <input placeholder="תפקיד" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className="field-input" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="field-input">
-              <option value="FIELD_OPERATOR">מפעיל שטח</option>
-              <option value="WAREHOUSE_MANAGER">מחסנאי דלק</option>
+            <option value="FIELD_OPERATOR">מפעיל שטח</option>
               <option value="OFFICE_MANAGER">משרד</option>
             </select>
             <input placeholder="סיסמה" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="field-input" />

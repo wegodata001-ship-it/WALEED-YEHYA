@@ -9,7 +9,14 @@ export type TaskSessionMeta = {
   photoUrls?: string[];
   media?: StoredMediaRef[];
   employeeNotes?: string;
+  meterReading?: number;
+  meterKind?: "odometer_km" | "engine_hours";
 };
+
+const VEHICLE_PREFIX = "__vehicle:";
+const MATERIAL_PREFIX = "__material:";
+const UNIT_LABEL_PREFIX = "__unitLabel:";
+const TAG_SUFFIX = "__";
 
 export function getTaskMedia(meta: TaskSessionMeta): StoredMediaRef[] {
   if (meta.media && meta.media.length > 0) return meta.media;
@@ -20,29 +27,94 @@ export function getTaskMedia(meta: TaskSessionMeta): StoredMediaRef[] {
   }));
 }
 
-const VEHICLE_PREFIX = "__vehicle:";
-const VEHICLE_SUFFIX = "__";
-
 export function encodeVehicleInDescription(vehiclePlate: string | null | undefined, notes: string | null | undefined) {
-  const plate = vehiclePlate?.trim();
-  const text = notes?.trim() || "";
-  if (!plate) return text || null;
-  const tag = `${VEHICLE_PREFIX}${plate}${VEHICLE_SUFFIX}`;
-  return text ? `${tag}\n${text}` : tag;
+  return encodeTaskDescription({ vehiclePlate, notes });
 }
 
-export function parseVehicleFromDescription(taskDescription: string | null | undefined): string | null {
+export function encodeTaskDescription(params: {
+  vehiclePlate?: string | null;
+  material?: string | null;
+  unitLabel?: string | null;
+  notes?: string | null;
+}): string | null {
+  const parts: string[] = [];
+  const plate = params.vehiclePlate?.trim();
+  const material = params.material?.trim();
+  const unitLabel = params.unitLabel?.trim();
+  const text = params.notes?.trim() || "";
+
+  if (plate) parts.push(`${VEHICLE_PREFIX}${plate}${TAG_SUFFIX}`);
+  if (material) parts.push(`${MATERIAL_PREFIX}${material}${TAG_SUFFIX}`);
+  if (unitLabel) parts.push(`${UNIT_LABEL_PREFIX}${unitLabel}${TAG_SUFFIX}`);
+  if (text) parts.push(text);
+
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+function parseTaggedValue(taskDescription: string | null | undefined, prefix: string): string | null {
   if (!taskDescription) return null;
-  const match = taskDescription.match(/__vehicle:(.+?)__/);
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = taskDescription.match(new RegExp(`${escaped}(.+?)${TAG_SUFFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   return match?.[1]?.trim() || null;
 }
 
+export function parseMaterialFromDescription(taskDescription: string | null | undefined): string | null {
+  return parseTaggedValue(taskDescription, MATERIAL_PREFIX);
+}
+
+export function parseUnitLabelFromDescription(taskDescription: string | null | undefined): string | null {
+  return parseTaggedValue(taskDescription, UNIT_LABEL_PREFIX);
+}
+
+export function parseVehicleFromDescription(taskDescription: string | null | undefined): string | null {
+  return parseTaggedValue(taskDescription, VEHICLE_PREFIX);
+}
+
 export function stripVehicleFromDescription(taskDescription: string | null | undefined): string | null {
+  return stripTaskTags(taskDescription);
+}
+
+export function stripTaskTags(taskDescription: string | null | undefined): string | null {
   if (!taskDescription) return null;
   const cleaned = taskDescription
-    .replace(new RegExp(`${VEHICLE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^${VEHICLE_SUFFIX.slice(1)}]+${VEHICLE_SUFFIX}\\n?`), "")
+    .replace(new RegExp(`${VEHICLE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^${TAG_SUFFIX.slice(1)}]+${TAG_SUFFIX}\\n?`, "g"), "")
+    .replace(new RegExp(`${MATERIAL_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^${TAG_SUFFIX.slice(1)}]+${TAG_SUFFIX}\\n?`, "g"), "")
+    .replace(new RegExp(`${UNIT_LABEL_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^${TAG_SUFFIX.slice(1)}]+${TAG_SUFFIX}\\n?`, "g"), "")
     .trim();
   return cleaned || null;
+}
+
+/** Backward-compatible task display fields */
+export function resolveTaskDisplayFields(task: {
+  plotName: string | null;
+  taskDescription: string | null;
+  quantityUnit: string;
+}) {
+  const material = parseMaterialFromDescription(task.taskDescription);
+  const unitLabel = parseUnitLabelFromDescription(task.taskDescription);
+  const legacyMaterial = !material ? task.plotName : null;
+
+  return {
+    material: material || legacyMaterial,
+    plot: material ? task.plotName : null,
+    workType: material || legacyMaterial,
+    unitLabel,
+  };
+}
+
+export function resolveMeterKind(task: {
+  machineryUnitId?: string | null;
+  vehiclePlate?: string | null;
+}): "odometer_km" | "engine_hours" | null {
+  if (task.machineryUnitId) return "engine_hours";
+  if (task.vehiclePlate) return "odometer_km";
+  return null;
+}
+
+export function meterKindLabel(kind: "odometer_km" | "engine_hours" | null | undefined) {
+  if (kind === "engine_hours") return "שעות מנוע";
+  if (kind === "odometer_km") return "קילומטרים";
+  return "מד אוץ";
 }
 
 export function parseSessionMeta(actualNotes: string | null | undefined): TaskSessionMeta {
@@ -63,7 +135,8 @@ export function serializeSessionMeta(meta: TaskSessionMeta): string | null {
     meta.completedAt ||
     (meta.media && meta.media.length > 0) ||
     (meta.photoUrls && meta.photoUrls.length > 0) ||
-    meta.employeeNotes?.trim();
+    meta.employeeNotes?.trim() ||
+    meta.meterReading != null;
   if (!hasData) return null;
   return JSON.stringify(meta);
 }
