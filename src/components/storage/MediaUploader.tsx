@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Film, Loader2, X } from "lucide-react";
 import type { StoredMediaRef } from "@/lib/storage/types";
+import { resolveMediaDisplayUrl } from "@/lib/storage/paths";
 import {
   deleteStoragePaths,
   getVideoDuration,
@@ -25,6 +26,8 @@ type MediaUploaderProps = {
   entityId: string;
   value: StoredMediaRef[];
   onChange: (media: StoredMediaRef[]) => void;
+  /** True while files are uploading — parent should block submit. */
+  onBusyChange?: (busy: boolean) => void;
   maxImages?: number;
   maxVideo?: number;
   maxVideoDurationSec?: number;
@@ -42,6 +45,7 @@ export function MediaUploader({
   entityId,
   value,
   onChange,
+  onBusyChange,
   maxImages,
   maxVideo,
   maxVideoDurationSec,
@@ -172,6 +176,11 @@ export function MediaUploader({
     };
   }, []);
 
+  const uploading = items.some((i) => i.status === "pending" || i.status === "uploading");
+  useEffect(() => {
+    onBusyChange?.(uploading);
+  }, [uploading, onBusyChange]);
+
   const pendingImages = items.filter((i) => i.kind === "image" && i.status !== "done");
   const pendingVideo = items.find((i) => i.kind === "video" && i.status !== "done");
 
@@ -295,29 +304,9 @@ export function MediaUploader({
 }
 
 function MediaThumb({ path, fallback }: { path: string; fallback: string }) {
-  const [src, setSrc] = useState(fallback);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (path.startsWith("http") || path.startsWith("/")) {
-      setSrc(path);
-      return;
-    }
-    fetch("/api/storage/signed-urls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paths: [path] }),
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled && d.urls?.[path]) setSrc(d.urls[path]);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
+  const src = resolveMediaDisplayUrl(path) || fallback;
   if (!src) return <div className="h-full w-full bg-muted/20" />;
-  return <img src={src} alt="" className="h-full w-full object-cover" />;
+  return (
+    <img src={src} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+  );
 }

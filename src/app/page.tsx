@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { AppShell } from "@/components/AppNav";
 import { DashboardClient } from "@/components/DashboardClient";
-import { Smartphone } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -11,12 +9,6 @@ export default function HomePage() {
           <p className="text-sm font-bold text-primary-dark">WALLED YEHYA GROUP</p>
           <p className="text-xs text-muted">סיכום לפי מחלקה — מכונות · תפעול · כספים · רכב · לקוחות · עובדים</p>
         </div>
-        <Link
-          href="/employee"
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-dark"
-        >
-          <Smartphone className="h-4 w-4" /> ממשק עובד
-        </Link>
       </div>
 
       <DashboardClient />

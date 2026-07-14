@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Plus, Smartphone, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { FUEL_SOURCE_LABELS, FUEL_RECIPIENT_LABELS } from "@/lib/constants";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import type { FuelTx, Source } from "@/components/dept/types";
@@ -107,12 +106,6 @@ export function FuelSection({
           >
             <Plus className="h-3.5 w-3.5" /> הוסף מיכל
           </button>
-          <Link
-            href="/employee/fuel"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold"
-          >
-            <Smartphone className="h-3.5 w-3.5" /> דיווח דלק
-          </Link>
         </div>
       </div>
 

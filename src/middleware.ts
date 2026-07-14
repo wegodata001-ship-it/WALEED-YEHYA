@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import {
+  isEmployeeApiAllowed,
+  isEmployeeSession,
+  isManagerSession,
+  shouldRedirectEmployeeFromPage,
+  shouldRedirectManagerFromEmployeePage,
+} from "@/lib/permissions";
 
 const COOKIE = "wyg-erp-session";
 const SECRET = new TextEncoder().encode(
@@ -8,6 +15,8 @@ const SECRET = new TextEncoder().encode(
 );
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
+
+type SessionJwt = { userId?: string; role?: string; orgId?: string };
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -31,8 +40,44 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    await jwtVerify(token, SECRET);
-    return NextResponse.next();
+    const { payload } = await jwtVerify(token, SECRET);
+    const role = String((payload as SessionJwt).role || "");
+
+    // —— Employee: never reach manager pages / manager APIs ——
+    if (isEmployeeSession(role)) {
+      if (pathname.startsWith("/api/")) {
+        const url = request.nextUrl;
+        if (!isEmployeeApiAllowed(request.method, pathname, url)) {
+          return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+        }
+        return NextResponse.next();
+      }
+
+      if (shouldRedirectEmployeeFromPage(pathname)) {
+        return NextResponse.redirect(new URL("/employee", request.url));
+      }
+
+      return NextResponse.next();
+    }
+
+    // —— Manager: never open employee / mobile UI ——
+    if (isManagerSession(role)) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+
+      if (shouldRedirectManagerFromEmployeePage(pathname)) {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+
+      return NextResponse.next();
+    }
+
+    // Unknown role — deny manager surfaces, send to login
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
   } catch {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "פג תוקף ההתחברות" }, { status: 401 });

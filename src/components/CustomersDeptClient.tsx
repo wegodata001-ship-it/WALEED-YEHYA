@@ -13,6 +13,14 @@ const TABS = [
   { id: "card", label: "כרטסת לקוח" },
 ];
 
+const emptyFarmerForm = () => ({
+  firstName: "",
+  lastName: "",
+  phone: "",
+  moshavName: "",
+  notes: "",
+});
+
 export function CustomersDeptClient() {
   const [tab, setTab] = useState("register");
   const [range, setRange] = useState<DateRangeState>(defaultDateRange(2024, 6));
@@ -23,14 +31,12 @@ export function CustomersDeptClient() {
   const [days, setDays] = useState<DayRow[]>([]);
   const [tasks, setTasks] = useState<FieldTaskRow[]>([]);
   const [adjustQty, setAdjustQty] = useState<Record<string, string>>({});
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    moshavName: "",
-    notes: "",
-  });
+  const [modal, setModal] = useState<"add" | "edit" | "view" | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<FarmerRow | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [form, setForm] = useState(emptyFarmerForm);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,27 +82,83 @@ export function CustomersDeptClient() {
     return clientRows.filter((r) => !term || r.customerName.includes(term) || r.settlement.includes(term));
   }, [clientRows, q]);
 
-  const addFarmer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch("/api/farmers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+  const openAdd = () => {
+    setEditingId(null);
+    setForm(emptyFarmerForm());
+    setMsg("");
+    setModal("add");
+  };
+
+  const openEdit = (f: FarmerRow) => {
+    setEditingId(f.id);
+    setViewing(null);
+    setForm({
+      firstName: f.firstName,
+      lastName: f.lastName,
+      phone: f.phone || "",
+      moshavName: f.moshav?.nameHe || f.moshav?.name || "",
+      notes: f.notes || "",
     });
-    if (res.ok) {
-      setShowAdd(false);
-      setForm({ firstName: "", lastName: "", phone: "", moshavName: "", notes: "" });
-      load();
+    setMsg("");
+    setModal("edit");
+  };
+
+  const openView = (f: FarmerRow) => {
+    setViewing(f);
+    setModal("view");
+  };
+
+  const closeModal = () => {
+    setModal(null);
+    setEditingId(null);
+    setViewing(null);
+    setMsg("");
+  };
+
+  const saveFarmer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMsg("");
+    try {
+      const url = modal === "edit" && editingId ? `/api/farmers/${editingId}` : "/api/farmers";
+      const method = modal === "edit" ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "שגיאה בשמירה");
+        return;
+      }
+      if (modal === "add") {
+        setFarmers((prev) => [data, ...prev]);
+      } else if (editingId) {
+        setFarmers((prev) => prev.map((x) => (x.id === editingId ? data : x)));
+      }
+      closeModal();
+    } finally {
+      setSaving(false);
     }
   };
 
-  const toggleFarmer = async (id: string, isActive: boolean) => {
-    await fetch(`/api/farmers/${id}`, {
+  const deleteFarmer = async (id: string) => {
+    const res = await fetch(`/api/farmers/${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    const data = await res.json();
+    setFarmers((prev) => prev.map((x) => (x.id === id ? data : x)));
+  };
+
+  const activateFarmer = async (id: string) => {
+    const res = await fetch(`/api/farmers/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive }),
+      body: JSON.stringify({ isActive: true }),
     });
-    load();
+    if (!res.ok) return;
+    const data = await res.json();
+    setFarmers((prev) => prev.map((x) => (x.id === id ? data : x)));
   };
 
   const approveTask = async (id: string, finalQuantity?: number) => {
@@ -110,13 +172,23 @@ export function CustomersDeptClient() {
         approvalStatus: "APPROVED",
       }),
     });
-    load();
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              approvalStatus: "APPROVED",
+              ...(finalQuantity != null ? { reportedQuantity: finalQuantity } : {}),
+            }
+          : t
+      )
+    );
   };
 
   return (
     <DepartmentLayout
       title="לקוחות"
-      subtitle="רישום בעלי שדה · כרטסת · התחשבנות"
+      subtitle="רישום · עריכה · מחיקה · כרטסת"
       tabs={TABS}
       activeTab={tab}
       onTabChange={setTab}
@@ -137,18 +209,25 @@ export function CustomersDeptClient() {
       ) : tab === "register" ? (
         <CustomersRegisterSection
           farmers={filteredFarmers}
-          showAdd={showAdd}
-          setShowAdd={setShowAdd}
-          form={form as Record<string, string>}
+          form={form}
           setForm={(v) =>
             setForm(
               typeof v === "function"
-                ? (v(form as Record<string, string>) as typeof form)
+                ? (v(form) as typeof form)
                 : (v as typeof form)
             )
           }
-          onAdd={addFarmer}
-          onToggle={toggleFarmer}
+          modal={modal}
+          viewing={viewing}
+          onOpenAdd={openAdd}
+          onOpenEdit={openEdit}
+          onOpenView={openView}
+          onCloseModal={closeModal}
+          onSave={saveFarmer}
+          onDelete={deleteFarmer}
+          onActivate={activateFarmer}
+          saving={saving}
+          msg={msg}
         />
       ) : (
         <CustomersCardSection

@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { EmployeesRegisterSection, EmployeesCardSection } from "@/components/dept/EmployeesSections";
+import {
+  EmployeesRegisterSection,
+  EmployeesCardSection,
+  emptyEmployeeForm,
+} from "@/components/dept/EmployeesSections";
 import type { DayRow, Employee } from "@/components/dept/types";
 import { dateRangeQuery, defaultDateRange, type DateRangeState } from "@/lib/dateRange";
 
@@ -12,6 +16,15 @@ const TABS = [
   { id: "register", label: "רישום ועריכה" },
   { id: "card", label: "כרטסת שעות" },
 ];
+
+function normalizeEmployee(e: Employee & { hourlyRate?: unknown; monthlySalary?: unknown }): Employee {
+  return {
+    ...e,
+    hourlyRate: e.hourlyRate != null ? Number(e.hourlyRate) : null,
+    monthlySalary: e.monthlySalary != null ? Number(e.monthlySalary) : null,
+    isActive: e.isActive !== false,
+  };
+}
 
 export function EmployeesDeptClient() {
   const [tab, setTab] = useState("register");
@@ -36,18 +49,12 @@ export function EmployeesDeptClient() {
       checkOutGps?: { lat: number; lng: number } | null;
     }[]
   >([]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [empForm, setEmpForm] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    position: "",
-    role: "FIELD_OPERATOR",
-    password: "1234",
-    salaryType: "HOURLY",
-    hourlyRate: "45",
-    monthlySalary: "",
-  });
+  const [modal, setModal] = useState<"add" | "edit" | "view" | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<Employee | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [empForm, setEmpForm] = useState(emptyEmployeeForm);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,15 +103,9 @@ export function EmployeesDeptClient() {
           )
       );
       if (Array.isArray(empList)) {
-        setEmployees(
-          empList.map((e: Employee & { hourlyRate?: unknown; monthlySalary?: unknown }) => ({
-            ...e,
-            hourlyRate: e.hourlyRate != null ? Number(e.hourlyRate) : null,
-            monthlySalary: e.monthlySalary != null ? Number(e.monthlySalary) : null,
-          }))
-        );
+        setEmployees(empList.map(normalizeEmployee));
       } else {
-        setEmployees(empReport.employees || []);
+        setEmployees((empReport.employees || []).map(normalizeEmployee));
       }
     } finally {
       setLoading(false);
@@ -127,24 +128,86 @@ export function EmployeesDeptClient() {
   const filteredEmployees = useMemo(() => {
     const term = q.trim();
     if (!term) return employees;
-    return employees.filter((e) => `${e.firstName} ${e.lastName} ${e.position || ""}`.includes(term));
+    return employees.filter((e) => `${e.firstName} ${e.lastName} ${e.position || ""} ${e.phone || ""}`.includes(term));
   }, [employees, q]);
 
-  const addEmployee = async (e: React.FormEvent) => {
+  const openAdd = () => {
+    setEditingId(null);
+    setEmpForm(emptyEmployeeForm());
+    setMsg("");
+    setModal("add");
+  };
+
+  const openEdit = (e: Employee) => {
+    setEditingId(e.id);
+    setViewing(null);
+    setEmpForm({
+      firstName: e.firstName,
+      lastName: e.lastName,
+      phone: e.phone || "",
+      position: e.position || "",
+      role: e.user?.role || "FIELD_OPERATOR",
+      password: "",
+      salaryType: e.salaryType === "MONTHLY" ? "MONTHLY" : "HOURLY",
+      hourlyRate: e.hourlyRate != null ? String(e.hourlyRate) : "45",
+      monthlySalary: e.monthlySalary != null ? String(e.monthlySalary) : "",
+    });
+    setMsg("");
+    setModal("edit");
+  };
+
+  const openView = (e: Employee) => {
+    setViewing(e);
+    setModal("view");
+  };
+
+  const closeModal = () => {
+    setModal(null);
+    setEditingId(null);
+    setViewing(null);
+    setMsg("");
+  };
+
+  const saveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("/api/employees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    setSaving(true);
+    setMsg("");
+    try {
+      const payload = {
         ...empForm,
         hourlyRate: empForm.salaryType === "HOURLY" ? Number(empForm.hourlyRate) : null,
         monthlySalary: empForm.salaryType === "MONTHLY" ? Number(empForm.monthlySalary) : null,
-      }),
-    });
-    if (res.ok) {
-      setShowAdd(false);
-      load();
+        ...(modal === "edit" && !empForm.password ? { password: undefined } : {}),
+      };
+      const url = modal === "edit" && editingId ? `/api/employees/${editingId}` : "/api/employees";
+      const method = modal === "edit" ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "שגיאה בשמירה");
+        return;
+      }
+      const row = normalizeEmployee(modal === "add" ? { ...data.employee, user: data.user } : data);
+      if (modal === "add") {
+        setEmployees((prev) => [row, ...prev]);
+      } else if (editingId) {
+        setEmployees((prev) => prev.map((x) => (x.id === editingId ? row : x)));
+      }
+      closeModal();
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const deleteEmployee = async (id: string) => {
+    const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    const data = await res.json();
+    setEmployees((prev) => prev.map((x) => (x.id === id ? normalizeEmployee(data) : x)));
   };
 
   const approveAttendance = async (id: string) => {
@@ -153,13 +216,13 @@ export function EmployeesDeptClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, approvalStatus: "APPROVED" }),
     });
-    load();
+    setPendingAttendance((prev) => prev.filter((r) => r.id !== id));
   };
 
   return (
     <DepartmentLayout
       title="עובדים"
-      subtitle="רישום · כרטסת שעות · נוכחות"
+      subtitle="רישום · עריכה · מחיקה · כרטסת שעות"
       tabs={TABS}
       activeTab={tab}
       onTabChange={setTab}
@@ -191,18 +254,24 @@ export function EmployeesDeptClient() {
       ) : tab === "register" ? (
         <EmployeesRegisterSection
           employees={filteredEmployees}
-          showAdd={showAdd}
-          setShowAdd={setShowAdd}
-          form={empForm as Record<string, string>}
+          form={empForm}
           setForm={(v) =>
             setEmpForm(
               typeof v === "function"
-                ? (v(empForm as Record<string, string>) as typeof empForm)
+                ? (v(empForm) as typeof empForm)
                 : (v as typeof empForm)
             )
           }
-          onAdd={addEmployee}
-          onOpenEmployee={() => setTab("card")}
+          modal={modal}
+          viewing={viewing}
+          onOpenAdd={openAdd}
+          onOpenEdit={openEdit}
+          onOpenView={openView}
+          onCloseModal={closeModal}
+          onSave={saveEmployee}
+          onDelete={deleteEmployee}
+          saving={saving}
+          msg={msg}
         />
       ) : (
         <EmployeesCardSection

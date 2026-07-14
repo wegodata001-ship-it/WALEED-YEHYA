@@ -5,6 +5,7 @@ import { parseDateRange } from "@/lib/dateRange";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 import { isEmployeeRole } from "@/lib/roles";
 import { parseAttendanceGpsMeta, serializeAttendanceGpsMeta, attendancePlainNotes } from "@/lib/attendance-gps";
+import { findActiveFieldTask, SHIFT_GATE_ERRORS } from "@/lib/shift-gate";
 
 export async function GET(req: NextRequest) {
   try {
@@ -163,6 +164,20 @@ export async function POST(req: NextRequest) {
       if (!open) {
         return NextResponse.json({ error: "אין כניסה פתוחה להיום" }, { status: 400 });
       }
+
+      // Business rule: cannot leave shift while a field task is IN_PROGRESS
+      const activeTask = await findActiveFieldTask(org.id, employeeId);
+      if (activeTask) {
+        return NextResponse.json(
+          {
+            error: SHIFT_GATE_ERRORS.ACTIVE_TASK_ON_CHECKOUT,
+            code: "ACTIVE_TASK",
+            activeTaskId: activeTask.id,
+          },
+          { status: 409 }
+        );
+      }
+
       const checkOut = new Date();
       const hours = (checkOut.getTime() - (open.checkIn?.getTime() || checkOut.getTime())) / 3600000;
       const notes = serializeAttendanceGpsMeta(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
+import { encodeOwnershipInNotes, withOwnershipField } from "@/lib/vehicle-ownership";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ vehicleType: "asc" }, { licensePlate: "asc" }],
     });
 
-    return NextResponse.json(vehicles);
+    return NextResponse.json(vehicles.map(withOwnershipField));
   } catch (e) {
     return handleApiAuth(e);
   }
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const org = await getDefaultOrg();
     const user = await requireManager();
+
+    if (!body.ownership || !["COMPANY", "CONTRACTOR"].includes(body.ownership)) {
+      return NextResponse.json({ error: "חובה לבחור סוג בעלות (רכב חברה / רכב קבלן)" }, { status: 400 });
+    }
 
     const vehicle = await prisma.vehicle.create({
       data: {
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
         windshieldInsurance: parseNum(body.windshieldInsurance),
         registeredTo: body.registeredTo || null,
         agentPhone: body.agentPhone || null,
-        notes: body.notes || null,
+        notes: encodeOwnershipInNotes(body.ownership, body.notes || null),
         isActive: body.isActive !== false,
       },
     });
@@ -77,7 +82,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(vehicle, { status: 201 });
+    return NextResponse.json(withOwnershipField(vehicle), { status: 201 });
   } catch (e) {
     if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);

@@ -6,22 +6,38 @@ import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
 import type { ClientRow, DayRow, FarmerRow, FieldTaskRow } from "@/components/dept/types";
 
+import { Eye, Pencil, Trash2, X } from "lucide-react";
+
 export function CustomersRegisterSection({
   farmers,
-  showAdd,
-  setShowAdd,
   form,
   setForm,
-  onAdd,
-  onToggle,
+  modal,
+  viewing,
+  onOpenAdd,
+  onOpenEdit,
+  onOpenView,
+  onCloseModal,
+  onSave,
+  onDelete,
+  onActivate,
+  saving,
+  msg,
 }: {
   farmers: FarmerRow[];
-  showAdd: boolean;
-  setShowAdd: (v: boolean) => void;
   form: Record<string, string>;
   setForm: (v: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
-  onAdd: (e: React.FormEvent) => void;
-  onToggle: (id: string, isActive: boolean) => void;
+  modal: "add" | "edit" | "view" | null;
+  viewing: FarmerRow | null;
+  onOpenAdd: () => void;
+  onOpenEdit: (f: FarmerRow) => void;
+  onOpenView: (f: FarmerRow) => void;
+  onCloseModal: () => void;
+  onSave: (e: React.FormEvent) => void;
+  onDelete: (id: string) => void;
+  onActivate: (id: string) => void;
+  saving?: boolean;
+  msg?: string;
 }) {
   return (
     <div className="space-y-4">
@@ -29,53 +45,12 @@ export function CustomersRegisterSection({
         <h3 className="text-sm font-bold text-primary-dark">רישום לקוחות (בעלי שדה)</h3>
         <button
           type="button"
-          onClick={() => setShowAdd(!showAdd)}
+          onClick={onOpenAdd}
           className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"
         >
-          הוסף לקוח
+          ➕ הוסף לקוח
         </button>
       </div>
-
-      {showAdd && (
-        <form onSubmit={onAdd} className="work-card p-4 grid gap-2 sm:grid-cols-2">
-          <input
-            required
-            placeholder="שם פרטי"
-            value={form.firstName}
-            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-            className="field-input"
-          />
-          <input
-            required
-            placeholder="שם משפחה"
-            value={form.lastName}
-            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-            className="field-input"
-          />
-          <input
-            placeholder="טלפון"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            className="field-input"
-            dir="ltr"
-          />
-          <input
-            placeholder="מושב / ישוב"
-            value={form.moshavName}
-            onChange={(e) => setForm({ ...form, moshavName: e.target.value })}
-            className="field-input"
-          />
-          <input
-            placeholder="הערות"
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            className="field-input sm:col-span-2"
-          />
-          <button type="submit" className="sm:col-span-2 rounded-md bg-primary py-2 text-white font-bold">
-            שמור לקוח
-          </button>
-        </form>
-      )}
 
       <div className="work-card-grid">
         {farmers.map((f) => (
@@ -88,23 +63,153 @@ export function CustomersRegisterSection({
               ...(f.notes ? [{ label: "הערות", value: f.notes }] : []),
               { label: "סטטוס", value: f.isActive ? "פעיל" : "מושבת" },
             ]}
+            onEdit={() => onOpenEdit(f)}
+            className={!f.isActive ? "opacity-60" : ""}
             footer={
-              <div className="px-4 pb-3">
+              <div className="px-4 pb-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => onToggle(f.id, !f.isActive)}
-                  className="text-xs font-bold text-primary"
+                  onClick={() => onOpenView(f)}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-primary"
                 >
-                  {f.isActive ? "השבת" : "הפעל מחדש"}
+                  <Eye className="h-3 w-3" /> צפייה
                 </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenEdit(f)}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                >
+                  <Pencil className="h-3 w-3" /> עריכה
+                </button>
+                {f.isActive ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`להשבית את ${f.firstName} ${f.lastName}?`)) onDelete(f.id);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-danger"
+                  >
+                    <Trash2 className="h-3 w-3" /> מחיקה
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onActivate(f.id)}
+                    className="text-xs font-bold text-primary"
+                  >
+                    הפעל מחדש
+                  </button>
+                )}
               </div>
             }
-            className={!f.isActive ? "opacity-60" : ""}
           />
         ))}
       </div>
       {farmers.length === 0 && (
         <p className="text-center text-muted py-8">אין לקוחות רשומים — הוסף לקוח חדש</p>
+      )}
+
+      {(modal === "add" || modal === "edit") && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <form onSubmit={onSave} className="w-full max-w-lg rounded-2xl bg-card border border-border p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold text-primary-dark">
+                {modal === "edit" ? "עריכת לקוח" : "הוספת לקוח"}
+              </h2>
+              <button type="button" onClick={onCloseModal} className="p-1 rounded hover:bg-muted/20">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                required
+                placeholder="שם פרטי"
+                value={form.firstName}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                className="field-input"
+              />
+              <input
+                required
+                placeholder="שם משפחה"
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                className="field-input"
+              />
+              <input
+                placeholder="טלפון"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="field-input"
+                dir="ltr"
+              />
+              <input
+                placeholder="מושב / ישוב"
+                value={form.moshavName}
+                onChange={(e) => setForm({ ...form, moshavName: e.target.value })}
+                className="field-input"
+              />
+              <input
+                placeholder="הערות"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                className="field-input sm:col-span-2"
+              />
+            </div>
+            {msg && <p className="text-sm text-red-600 font-semibold">{msg}</p>}
+            <button type="submit" disabled={saving} className="w-full rounded-xl bg-primary py-3 text-white font-extrabold disabled:opacity-50">
+              {saving ? "שומר..." : "שמור"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {modal === "view" && viewing && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-card border border-border p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold text-primary-dark">פרטי לקוח</h2>
+              <button type="button" onClick={onCloseModal} className="p-1 rounded hover:bg-muted/20">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">שם</dt>
+                <dd className="font-bold">
+                  {viewing.firstName} {viewing.lastName}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">טלפון</dt>
+                <dd dir="ltr">{viewing.phone || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">מושב</dt>
+                <dd>{viewing.moshav?.nameHe || viewing.moshav?.name || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">הערות</dt>
+                <dd>{viewing.notes || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">סטטוס</dt>
+                <dd>{viewing.isActive ? "פעיל" : "מושבת"}</dd>
+              </div>
+            </dl>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => onOpenEdit(viewing)}
+                className="flex-1 rounded-xl bg-primary py-2.5 text-white font-bold text-sm"
+              >
+                עריכה
+              </button>
+              <button type="button" onClick={onCloseModal} className="flex-1 rounded-xl border border-border py-2.5 font-bold text-sm">
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -154,7 +259,7 @@ export function CustomersCardSection({
               footer={
                 <>
                   <div className="px-4 pb-2">
-                    <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} />
+                    <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} showEmpty />
                   </div>
                   <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
                   <button

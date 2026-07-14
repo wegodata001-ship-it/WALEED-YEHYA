@@ -25,6 +25,8 @@ export default function EmployeeAttendancePage() {
   const [openShift, setOpenShift] = useState<OpenShift | null>(null);
   const [elapsed, setElapsed] = useState("00:00:00");
   const [msg, setMsg] = useState("");
+  const [msgError, setMsgError] = useState(false);
+  const [blockActiveTask, setBlockActiveTask] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,11 +68,14 @@ export default function EmployeeAttendancePage() {
   const startDay = async () => {
     setBusy(true);
     setMsg("");
+    setMsgError(false);
+    setBlockActiveTask(false);
     try {
       let gps: { lat: number; lng: number };
       try {
         gps = await getCurrentPosition();
       } catch (e) {
+        setMsgError(true);
         setMsg(e instanceof Error ? e.message : "לא ניתן לקבל מיקום GPS");
         return;
       }
@@ -81,6 +86,7 @@ export default function EmployeeAttendancePage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        setMsgError(true);
         setMsg(data.error || "שגיאה");
         return;
       }
@@ -94,11 +100,14 @@ export default function EmployeeAttendancePage() {
   const endDay = async () => {
     setBusy(true);
     setMsg("");
+    setMsgError(false);
+    setBlockActiveTask(false);
     try {
       let gps: { lat: number; lng: number };
       try {
         gps = await getCurrentPosition();
       } catch (e) {
+        setMsgError(true);
         setMsg(e instanceof Error ? e.message : "לא ניתן לקבל מיקום GPS");
         return;
       }
@@ -109,7 +118,11 @@ export default function EmployeeAttendancePage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        setMsgError(true);
         setMsg(data.error || "שגיאה");
+        if (data.code === "ACTIVE_TASK" || res.status === 409) {
+          setBlockActiveTask(true);
+        }
         return;
       }
       const hours =
@@ -188,10 +201,26 @@ export default function EmployeeAttendancePage() {
         )}
 
         {msg && (
-          <p className="text-sm text-center rounded-xl border border-border bg-card py-3 font-semibold text-primary-dark flex items-center justify-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-            {msg}
-          </p>
+          <div className="space-y-2">
+            <p
+              className={`text-sm text-center rounded-xl border py-3 font-semibold flex items-center justify-center gap-2 px-3 ${
+                msgError
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : "border-border bg-card text-primary-dark"
+              }`}
+            >
+              {!msgError && <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />}
+              {msg}
+            </p>
+            {blockActiveTask && (
+              <Link
+                href="/employee/schedule"
+                className="flex items-center justify-center rounded-xl bg-primary py-3 font-extrabold text-white text-sm"
+              >
+                מעבר לסידור העבודה
+              </Link>
+            )}
+          </div>
         )}
 
         <Link

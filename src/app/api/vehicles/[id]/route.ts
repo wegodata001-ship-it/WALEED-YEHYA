@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
+import {
+  encodeOwnershipInNotes,
+  parseOwnershipFromNotes,
+  stripOwnershipFromNotes,
+  withOwnershipField,
+} from "@/lib/vehicle-ownership";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -19,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const vehicle = await prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
-    return NextResponse.json(vehicle);
+    return NextResponse.json(withOwnershipField(vehicle));
   } catch (e) {
     return handleApiAuth(e);
   }
@@ -34,6 +40,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const old = await prisma.vehicle.findUnique({ where: { id } });
     if (!old) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
+
+    const ownership =
+      body.ownership !== undefined
+        ? body.ownership
+        : parseOwnershipFromNotes(old.notes);
+    const plainNotes =
+      body.notes !== undefined ? body.notes : stripOwnershipFromNotes(old.notes);
 
     const vehicle = await prisma.vehicle.update({
       where: { id },
@@ -56,7 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         windshieldInsurance: body.windshieldInsurance !== undefined ? parseNum(body.windshieldInsurance) : old.windshieldInsurance,
         registeredTo: body.registeredTo !== undefined ? body.registeredTo : old.registeredTo,
         agentPhone: body.agentPhone !== undefined ? body.agentPhone : old.agentPhone,
-        notes: body.notes !== undefined ? body.notes : old.notes,
+        notes: encodeOwnershipInNotes(ownership, plainNotes),
         isActive: body.isActive !== undefined ? body.isActive : old.isActive,
       },
     });
@@ -73,7 +86,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
-    return NextResponse.json(vehicle);
+    return NextResponse.json(withOwnershipField(vehicle));
   } catch (e) {
     if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);

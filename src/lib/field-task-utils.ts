@@ -2,6 +2,16 @@
 
 import type { StoredMediaRef } from "./storage/types";
 
+export type TaskProgressReport = {
+  at: string;
+  /** Quantity added in this report (not cumulative). */
+  quantity: number;
+  /** Cumulative total after this report. */
+  totalAfter: number;
+  notes?: string | null;
+  media?: StoredMediaRef[];
+};
+
 export type TaskSessionMeta = {
   startedAt?: string;
   completedAt?: string;
@@ -11,6 +21,8 @@ export type TaskSessionMeta = {
   employeeNotes?: string;
   meterReading?: number;
   meterKind?: "odometer_km" | "engine_hours";
+  /** Chronological progress logs for partial completion. */
+  progressReports?: TaskProgressReport[];
 };
 
 const VEHICLE_PREFIX = "__vehicle:";
@@ -136,7 +148,8 @@ export function serializeSessionMeta(meta: TaskSessionMeta): string | null {
     (meta.media && meta.media.length > 0) ||
     (meta.photoUrls && meta.photoUrls.length > 0) ||
     meta.employeeNotes?.trim() ||
-    meta.meterReading != null;
+    meta.meterReading != null ||
+    (meta.progressReports && meta.progressReports.length > 0);
   if (!hasData) return null;
   return JSON.stringify(meta);
 }
@@ -174,13 +187,33 @@ export function taskHasVideo(media: StoredMediaRef[]): boolean {
 }
 
 export const TASK_STATUS_COLORS: Record<string, string> = {
-  ASSIGNED: "bg-slate-100 text-slate-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-800",
+  ASSIGNED: "bg-amber-100 text-amber-900",
+  IN_PROGRESS: "bg-orange-100 text-orange-900",
+  /** @deprecated legacy partial status — treated as IN_PROGRESS / בטיפול */
+  AWAITING_COMPLETION: "bg-orange-100 text-orange-900",
   COMPLETED: "bg-emerald-100 text-emerald-800",
 };
 
+/** Display labels — progress-driven (not just "סיום" click). */
 export const TASK_STATUS_LABELS: Record<string, string> = {
-  ASSIGNED: "ממתין",
-  IN_PROGRESS: "בביצוע",
-  COMPLETED: "הושלם",
+  ASSIGNED: "🟡 ממתין",
+  IN_PROGRESS: "🟠 בטיפול",
+  AWAITING_COMPLETION: "🟠 בטיפול",
+  COMPLETED: "🟢 הושלם",
 };
+
+/** Statuses that still appear in the employee's active work list. */
+export const EMPLOYEE_ACTIVE_TASK_STATUSES = ["ASSIGNED", "IN_PROGRESS", "AWAITING_COMPLETION"] as const;
+
+/** Work started / not fully done — blocks leaving the shift. */
+export const OPEN_WORK_TASK_STATUSES = ["IN_PROGRESS", "AWAITING_COMPLETION"] as const;
+
+/** Normalize legacy AWAITING_COMPLETION → IN_PROGRESS for filters/display groups. */
+export function normalizeTaskStatus(status: string): "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | string {
+  if (status === "AWAITING_COMPLETION") return "IN_PROGRESS";
+  return status;
+}
+
+export function isInTreatmentStatus(status: string): boolean {
+  return status === "IN_PROGRESS" || status === "AWAITING_COMPLETION";
+}

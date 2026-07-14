@@ -144,7 +144,7 @@ export function OpsApprovalsSection({
                 footer={
                   <>
                     <div className="px-4 pb-2">
-                      <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} />
+                      <TaskMediaViewer media={t.media} legacyUrls={t.photoUrls} showEmpty />
                     </div>
                     <div className="flex flex-wrap gap-2 items-center px-4 pb-3">
                       <button

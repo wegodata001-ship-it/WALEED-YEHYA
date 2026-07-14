@@ -1,6 +1,6 @@
 "use client";
 
-import { X, MapPin, Camera, Film } from "lucide-react";
+import { X, Camera, Film } from "lucide-react";
 import { MediaGallery } from "@/components/storage/MediaGallery";
 import {
   TASK_STATUS_LABELS,
@@ -56,34 +56,40 @@ export function TaskDetailModal({ task, onClose }: { task: HistoryTask; onClose:
           {TASK_STATUS_LABELS[task.status] || task.status}
         </span>
 
-        <div className="space-y-2 text-sm">
-          <p className="flex items-center gap-1">
-            <MapPin className="h-4 w-4 shrink-0" />
-            {task.settlement || "—"}
-          </p>
-          <p>
-            <span className="text-muted">סוג עבודה: </span>
-            <strong>{task.workType || task.plotName || "—"}</strong>
-          </p>
-          {task.machineryUnit?.name && (
-            <p>
-              <span className="text-muted">מכונה: </span>
-              <strong>{task.machineryUnit.name}</strong>
-            </p>
-          )}
-          <p>
-            <span className="text-muted">התחלה: </span>
-            {task.startedAt ? new Date(task.startedAt).toLocaleString("he-IL") : "—"}
-          </p>
-          <p>
-            <span className="text-muted">סיום: </span>
-            {task.completedAt ? new Date(task.completedAt).toLocaleString("he-IL") : "—"}
-          </p>
-          <p>
-            <span className="text-muted">זמן עבודה: </span>
-            <strong>{formatWorkDuration(task.startedAt, task.completedAt)}</strong>
-          </p>
-          <p className="flex items-center gap-3">
+        <dl className="space-y-1.5 text-sm">
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">לקוח</dt>
+            <dd className="font-bold">{task.customerName || "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">ישוב</dt>
+            <dd>{task.settlement || "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">חלקה</dt>
+            <dd>{task.plotName || "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">חומר</dt>
+            <dd>{task.workType || "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">מכונה</dt>
+            <dd>{task.machineryUnit?.name || "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">התחלה</dt>
+            <dd>{task.startedAt ? new Date(task.startedAt).toLocaleString("he-IL") : "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">סיום</dt>
+            <dd>{task.completedAt ? new Date(task.completedAt).toLocaleString("he-IL") : "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">זמן עבודה</dt>
+            <dd className="font-bold">{formatWorkDuration(task.startedAt, task.completedAt)}</dd>
+          </div>
+          <p className="flex items-center gap-3 pt-1">
             <span className="flex items-center gap-1">
               <Camera className="h-4 w-4" /> {imageCount} תמונות
             </span>
@@ -93,11 +99,11 @@ export function TaskDetailModal({ task, onClose }: { task: HistoryTask; onClose:
               </span>
             )}
           </p>
-        </div>
+        </dl>
 
         {task.employeeNotes && (
           <div className="rounded-lg bg-muted/10 border border-border p-3">
-            <p className="text-xs font-bold text-muted mb-1">הערות העובד</p>
+            <p className="text-xs font-bold text-muted mb-1">הערות</p>
             <p className="text-sm whitespace-pre-wrap">{task.employeeNotes}</p>
           </div>
         )}

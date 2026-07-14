@@ -14,7 +14,22 @@ export type FieldTaskRow = {
   quantityUnitLabel?: string;
   plannedQuantity: number;
   reportedQuantity: number | null;
+  remainingQuantity?: number | null;
   quantityUnit: string;
+  progressReports?: {
+    at: string;
+    quantity: number;
+    totalAfter: number;
+    notes?: string | null;
+  }[];
+  quantityComparison?: {
+    planned: number;
+    reported: number | null;
+    remaining: number | null;
+    completionPct: number | null;
+    status: "FULL" | "PARTIAL" | "OVER" | "PENDING";
+    isHours: boolean;
+  };
   status: string;
   approvalStatus: string;
   actualNotes: string | null;
@@ -26,7 +41,8 @@ export type FieldTaskRow = {
   session?: { meterReading?: number; meterKind?: "odometer_km" | "engine_hours" };
   photoUrls?: string[];
   media?: { path: string; kind: "image" | "video"; mimeType: string }[];
-  assignee: { firstName: string; lastName: string };
+  assigneeId?: string;
+  assignee: { id?: string; firstName: string; lastName: string };
   machineryUnit: { name: string } | null;
   machineryUnitId?: string | null;
 };
@@ -88,6 +104,8 @@ export type Employee = {
   salaryType?: string;
   hourlyRate?: number | null;
   monthlySalary?: number | null;
+  isActive?: boolean;
+  user?: { id: string; phone: string | null; role: string; isActive: boolean } | null;
 };
 
 export type ClientRow = {

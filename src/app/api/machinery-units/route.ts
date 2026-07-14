@@ -8,8 +8,9 @@ export async function GET() {
   try {
     await requireManager();
   const org = await getDefaultOrg();
+  const includeInactive = false;
   const units = await prisma.machineryUnit.findMany({
-    where: { organizationId: org.id, isActive: true },
+    where: { organizationId: org.id, ...(includeInactive ? {} : { isActive: true }) },
     orderBy: { sortOrder: "asc" },
     select: {
       id: true,
@@ -18,6 +19,7 @@ export async function GET() {
       unitNumber: true,
       headerColor: true,
       sortOrder: true,
+      isActive: true,
     },
   });
   return NextResponse.json(units);

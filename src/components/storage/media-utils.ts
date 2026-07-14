@@ -1,5 +1,8 @@
 import { isStoragePath } from "@/lib/storage/paths";
 
+/** Re-export — canonical definition lives in @/lib/storage/paths */
+export { resolveMediaDisplayUrl } from "@/lib/storage/paths";
+
 export async function fetchSignedUrls(paths: string[]): Promise<Record<string, string>> {
   const storagePaths = paths.filter(isStoragePath);
   if (storagePaths.length === 0) return {};
@@ -9,8 +12,10 @@ export async function fetchSignedUrls(paths: string[]): Promise<Record<string, s
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paths: storagePaths }),
   });
-  if (!res.ok) return {};
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "שגיאה בטעינת קישורים למדיה");
+  }
   return data.urls || {};
 }
 

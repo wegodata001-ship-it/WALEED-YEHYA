@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmployeeShell } from "@/components/EmployeeShell";
 import { PhotoCapture } from "@/components/PhotoCapture";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -8,6 +8,7 @@ import { FUEL_SOURCE_LABELS } from "@/lib/constants";
 import { formatFuelWhatsApp } from "@/lib/whatsapp";
 import { addToOfflineQueue } from "@/lib/offline-sync";
 import { CheckCircle2, Loader2 } from "lucide-react";
+import type { VehicleOwnership } from "@/lib/vehicle-ownership";
 
 type FuelRecipient = {
   id: string;
@@ -20,11 +21,19 @@ type FuelRecipient = {
   vehicle?: { licensePlate: string } | null;
 };
 
+type LookupVehicle = {
+  id: string;
+  licensePlate: string;
+  make: string | null;
+  model: string | null;
+  ownership?: VehicleOwnership;
+};
+
 type Lookup = {
   employees: { id: string; firstName: string; lastName: string }[];
   fuelSources: { id: string; name: string; sourceType: string; currentLevel: number }[];
   fuelRecipients: FuelRecipient[];
-  vehicles: { id: string; licensePlate: string; make: string | null; model: string | null }[];
+  vehicles: LookupVehicle[];
 };
 
 type Mode = "vehicle" | "external" | "tank_fill";
@@ -37,7 +46,6 @@ export default function MobileFuelPage() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("vehicle");
   const [form, setForm] = useState({
-    recipientId: "",
     vehicleId: "",
     licensePlate: "",
     sourceId: "",
@@ -56,13 +64,20 @@ export default function MobileFuelPage() {
     );
   }, []);
 
-  const recipients = lookup?.fuelRecipients || [];
-  const vehicles = recipients.filter((r) => r.category === "COMPANY_VEHICLE");
-  const external = recipients.filter((r) => r.category === "EXTERNAL_CUSTOMER");
   const tanks = (lookup?.fuelSources || []).filter((s) => s.sourceType === "FIXED_TANK" || s.sourceType === "FIELD_CART");
+  const recipients = lookup?.fuelRecipients || [];
 
-  const selectedRecipient = recipients.find((r) => r.id === form.recipientId);
-  const isExternal = mode === "external";
+  const filteredVehicles = useMemo(() => {
+    const list = lookup?.vehicles || [];
+    const want: VehicleOwnership = mode === "external" ? "CONTRACTOR" : "COMPANY";
+    const byOwnership = list.filter((v) => (v.ownership || "COMPANY") === want);
+    // Backward compatible: if no vehicles tagged yet for this ownership, show all for that mode seed
+    if (byOwnership.length > 0) return byOwnership;
+    if (want === "COMPANY") return list.filter((v) => !v.ownership || v.ownership === "COMPANY");
+    return byOwnership;
+  }, [lookup?.vehicles, mode]);
+
+  const selectedVehicle = filteredVehicles.find((v) => v.id === form.vehicleId);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,28 +85,26 @@ export default function MobileFuelPage() {
 
     const isFill = mode === "tank_fill";
     const payload = {
-      recipientId: isFill ? null : form.recipientId || null,
-      vehicleId: form.vehicleId || selectedRecipient?.vehicleId || null,
-      licensePlate: form.licensePlate || selectedRecipient?.vehicle?.licensePlate || null,
+      recipientId: null as string | null,
+      vehicleId: isFill ? null : form.vehicleId || null,
+      licensePlate: isFill ? null : form.licensePlate || selectedVehicle?.licensePlate || null,
       sourceId: isFill ? null : form.sourceId,
       fuelSourceId: isFill ? form.tankSourceId : undefined,
       liters: Number(form.liters),
       odometerKm: form.odometerKm ? Number(form.odometerKm) : null,
-      pricePerLiter: isExternal && selectedRecipient?.pricePerLiter ? Number(selectedRecipient.pricePerLiter) : undefined,
       meterPhotoUrl,
       notes: form.notes || null,
-      transactionType: isFill ? "TANK_FILL" : isExternal ? "SUBCONTRACTOR_CHARGE" : "REFUEL_VEHICLE",
+      transactionType: isFill ? "TANK_FILL" : mode === "external" ? "SUBCONTRACTOR_CHARGE" : "REFUEL_VEHICLE",
       transactionDate: new Date().toISOString(),
     };
 
-    // For tank fill, use recipient that matches tank or pass source via special field
     if (isFill) {
       const tankRecipient = recipients.find(
         (r) => r.category === "TANK" && (r.columnRole === "TANK_FILL" || r.fuelSourceId === form.tankSourceId)
       );
-      (payload as { recipientId: string | null }).recipientId =
+      payload.recipientId =
         recipients.find((r) => r.columnRole === "TANK_FILL")?.id || tankRecipient?.id || null;
-      (payload as { sourceId: string | null }).sourceId = form.tankSourceId;
+      payload.sourceId = form.tankSourceId;
     }
 
     try {
@@ -123,8 +136,8 @@ export default function MobileFuelPage() {
 
   if (saved) {
     const msg = formatFuelWhatsApp({
-      operator: operatorName || selectedRecipient?.name || "",
-      vehicle: form.licensePlate || selectedRecipient?.name || "",
+      operator: operatorName || "",
+      vehicle: form.licensePlate || selectedVehicle?.licensePlate || "",
       liters: Number(form.liters),
       source: lookup.fuelSources.find((s) => s.id === form.sourceId || s.id === form.tankSourceId)?.name || "",
       odometer: form.odometerKm ? Number(form.odometerKm) : null,
@@ -139,7 +152,7 @@ export default function MobileFuelPage() {
           <button
             onClick={() => {
               setSaved(null);
-              setForm({ ...form, liters: "", odometerKm: "", notes: "" });
+              setForm({ ...form, liters: "", odometerKm: "", notes: "", vehicleId: "", licensePlate: "" });
               setMeterPhotoUrl(null);
             }}
             className="mt-4 w-full rounded-xl border border-border py-3 text-sm font-medium"
@@ -152,7 +165,7 @@ export default function MobileFuelPage() {
   }
 
   return (
-    <EmployeeShell title="דיווח תדלוק" subtitle="רכב חברה · קבלן · מילוי מיכל">
+    <EmployeeShell title="דיווח תדלוק" subtitle="רכב חברה · רכב קבלן · מילוי מיכל">
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-3 gap-2">
           {(
@@ -167,7 +180,7 @@ export default function MobileFuelPage() {
               type="button"
               onClick={() => {
                 setMode(k);
-                setForm({ ...form, recipientId: "", tankSourceId: "", sourceId: "" });
+                setForm({ ...form, vehicleId: "", licensePlate: "", tankSourceId: "", sourceId: "" });
               }}
               className={`rounded-lg border px-2 py-2.5 text-xs font-bold ${
                 mode === k ? "bg-primary text-white border-primary" : "bg-card border-border"
@@ -195,47 +208,34 @@ export default function MobileFuelPage() {
             </select>
           </Field>
         ) : (
-          <Field label={mode === "external" ? "קבלן / לקוח חיצוני" : "רכב חברה"} required>
-            <select
-              required
-              value={form.recipientId}
-              onChange={(e) => {
-                const r = recipients.find((x) => x.id === e.target.value);
-                setForm({
-                  ...form,
-                  recipientId: e.target.value,
-                  licensePlate: r?.vehicle?.licensePlate || form.licensePlate,
-                  vehicleId: r?.vehicleId || "",
-                });
-              }}
-              className="field-input"
-            >
-              <option value="">בחר...</option>
-              {(mode === "vehicle" ? vehicles : external).map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                  {r.pricePerLiter ? ` · ₪${Number(r.pricePerLiter)}/ל׳` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-
-        {mode !== "tank_fill" && (
           <>
-            <Field label="מספר רכב">
-              <input
-                value={form.licensePlate}
-                onChange={(e) => setForm({ ...form, licensePlate: e.target.value })}
+            <Field label={mode === "external" ? "רכב קבלן" : "רכב חברה"} required>
+              <select
+                required
+                value={form.vehicleId}
+                onChange={(e) => {
+                  const v = filteredVehicles.find((x) => x.id === e.target.value);
+                  setForm({
+                    ...form,
+                    vehicleId: e.target.value,
+                    licensePlate: v?.licensePlate || "",
+                  });
+                }}
                 className="field-input"
-                placeholder="מס׳ רישוי"
-                list="plates"
-              />
-              <datalist id="plates">
-                {(lookup.vehicles || []).map((v) => (
-                  <option key={v.id} value={v.licensePlate} />
+              >
+                <option value="">בחר רכב...</option>
+                {filteredVehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.licensePlate}
+                    {v.model ? ` · ${v.model}` : ""}
+                  </option>
                 ))}
-              </datalist>
+              </select>
+              {filteredVehicles.length === 0 && (
+                <p className="text-xs text-muted mt-1">
+                  אין רכבים מסוג זה — יש להגדיר סוג בעלות במסך כלי רכב אצל המנהל
+                </p>
+              )}
             </Field>
             <Field label="מקור דלק" required>
               <select
@@ -283,13 +283,6 @@ export default function MobileFuelPage() {
           </Field>
         </div>
 
-        {isExternal && selectedRecipient?.pricePerLiter && (
-          <p className="text-sm rounded-lg border border-border bg-card px-3 py-2">
-            מחיר: <strong>₪{Number(selectedRecipient.pricePerLiter)}/ל׳</strong>
-            {" · "}סה״כ: ₪{(Number(form.liters || 0) * Number(selectedRecipient.pricePerLiter)).toFixed(0)}
-          </p>
-        )}
-
         <Field label="הערות">
           <textarea
             value={form.notes}
@@ -314,7 +307,8 @@ function Field({ label, required, children }: { label: string; required?: boolea
   return (
     <div>
       <label className="block text-sm font-semibold text-primary-dark mb-1">
-        {label}{required && <span className="text-danger"> *</span>}
+        {label}
+        {required && <span className="text-danger"> *</span>}
       </label>
       {children}
     </div>

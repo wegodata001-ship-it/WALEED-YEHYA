@@ -6,7 +6,6 @@ import {
   Tractor,
   CircleDot,
   LayoutDashboard,
-  Smartphone,
   LogOut,
   Briefcase,
   Wallet,
@@ -85,10 +84,6 @@ export function AppToolbar() {
         </nav>
 
         <div className="app-toolbar-actions shrink-0">
-          <Link href="/employee" className="app-action app-action-field">
-            <Smartphone className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">עובדים</span>
-          </Link>
           <button type="button" onClick={logout} className="app-action" title="יציאה">
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden md:inline">יציאה</span>

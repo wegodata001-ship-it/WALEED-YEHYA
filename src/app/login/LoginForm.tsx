@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Tractor, Loader2, Phone, Lock } from "lucide-react";
 
 export default function LoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -27,8 +26,8 @@ export default function LoginForm() {
         setError(data.error || "שגיאה בהתחברות");
         return;
       }
-      const next = searchParams.get("next");
-      router.push(next && !next.startsWith("/login") ? next : data.redirectTo || "/");
+      // Always use role-safe redirect from server (ignores ?next= into foreign app)
+      router.push(data.redirectTo || "/");
       router.refresh();
     } catch {
       setError("שגיאת רשת — נסה שוב");

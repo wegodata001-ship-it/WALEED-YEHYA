@@ -14,8 +14,14 @@ import {
   resolveTaskDisplayFields,
   serializeSessionMeta,
   stripTaskTags,
+  type TaskProgressReport,
 } from "@/lib/field-task-utils";
 import { quantityUnitDisplayLabel, parseScheduleQuantityUnit } from "@/lib/constants";
+import { compareTaskQuantities } from "@/lib/task-quantity";
+import { findOpenShift, SHIFT_GATE_ERRORS } from "@/lib/shift-gate";
+
+const REPORTABLE_STATUSES = new Set(["IN_PROGRESS", "AWAITING_COMPLETION"]);
+const QUANTITY_EPS = 0.01;
 
 function serializeTask(t: {
   id: string;
@@ -41,10 +47,17 @@ function serializeTask(t: {
   const vehiclePlate = parseVehicleFromDescription(t.taskDescription);
   const display = resolveTaskDisplayFields(t);
   const unitLabel = display.unitLabel ?? parseUnitLabelFromDescription(t.taskDescription);
+  const plannedQuantity = Number(t.plannedQuantity);
+  const reportedQuantity = t.reportedQuantity != null ? Number(t.reportedQuantity) : null;
+  const quantityComparison = compareTaskQuantities(plannedQuantity, reportedQuantity, t.quantityUnit);
+  const progressReports = Array.isArray(session.progressReports) ? session.progressReports : [];
   return {
     ...t,
-    plannedQuantity: Number(t.plannedQuantity),
-    reportedQuantity: t.reportedQuantity != null ? Number(t.reportedQuantity) : null,
+    plannedQuantity,
+    reportedQuantity,
+    remainingQuantity: quantityComparison.remaining,
+    progressReports,
+    quantityComparison,
     vehiclePlate,
     managerNotes: stripTaskTags(t.taskDescription),
     material: display.material,
@@ -196,6 +209,20 @@ export async function PATCH(req: NextRequest) {
       if (task.status !== "ASSIGNED") {
         return NextResponse.json({ error: "העבודה כבר התחילה או הסתיימה" }, { status: 400 });
       }
+
+      // Business rule: assignee must be on an open attendance shift
+      const org = await getDefaultOrg();
+      const openShift = await findOpenShift(org.id, task.assigneeId);
+      if (!openShift) {
+        return NextResponse.json(
+          {
+            error: SHIFT_GATE_ERRORS.NO_OPEN_SHIFT,
+            code: "NO_OPEN_SHIFT",
+          },
+          { status: 409 }
+        );
+      }
+
       const updated = await prisma.fieldTask.update({
         where: { id: body.id },
         data: {
@@ -210,7 +237,14 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(serializeTask(updated));
     }
 
-    if (body.action === "complete") {
+    if (body.action === "complete" || body.action === "progress") {
+      if (!REPORTABLE_STATUSES.has(task.status)) {
+        return NextResponse.json(
+          { error: "ניתן לדווח ביצוע רק על משימה בטיפול" },
+          { status: 400 }
+        );
+      }
+
       const vehiclePlate = parseVehicleFromDescription(task.taskDescription);
       const meterKind = resolveMeterKind({ machineryUnitId: task.machineryUnitId, vehiclePlate });
       let meterReading: number | undefined;
@@ -224,7 +258,21 @@ export async function PATCH(req: NextRequest) {
         }
       }
 
-      const reported = body.reportedQuantity != null ? Number(body.reportedQuantity) : Number(task.plannedQuantity);
+      if (body.reportedQuantity == null || body.reportedQuantity === "") {
+        return NextResponse.json({ error: "יש למלא כמות שבוצעה" }, { status: 400 });
+      }
+      // Body quantity = this session's added amount (not cumulative total)
+      const increment = Number(body.reportedQuantity);
+      if (!Number.isFinite(increment) || increment <= 0) {
+        return NextResponse.json({ error: "כמות שבוצעה חייבת להיות גדולה מאפס" }, { status: 400 });
+      }
+
+      const planned = Number(task.plannedQuantity);
+      const previousTotal = task.reportedQuantity != null ? Number(task.reportedQuantity) : 0;
+      const newTotal = Math.round((previousTotal + increment) * 1000) / 1000;
+      const remainingAfter = Math.round((planned - newTotal) * 1000) / 1000;
+      const isFullyDone = remainingAfter <= QUANTITY_EPS;
+
       const existing = parseSessionMeta(task.actualNotes);
       const media = Array.isArray(body.media)
         ? body.media
@@ -244,28 +292,48 @@ export async function PATCH(req: NextRequest) {
       const legacyPhotoUrls = Array.isArray(body.photoUrls)
         ? body.photoUrls.filter((u: unknown) => typeof u === "string")
         : [];
-      const completedAt = new Date().toISOString();
-      const sessionMeta = serializeSessionMeta({
-        startedAt: existing.startedAt || completedAt,
-        completedAt,
+
+      const reportedAt = new Date().toISOString();
+      const progressEntry: TaskProgressReport = {
+        at: reportedAt,
+        quantity: increment,
+        totalAfter: newTotal,
+        notes: body.actualNotes || body.employeeNotes || null,
         media: media.length > 0 ? media : undefined,
-        photoUrls: media.length === 0 && legacyPhotoUrls.length > 0 ? legacyPhotoUrls : undefined,
-        employeeNotes: body.actualNotes || body.employeeNotes || null,
+      };
+      const progressReports = [...(existing.progressReports || []), progressEntry];
+      const mergedMedia = [...(existing.media || []), ...media];
+      const mergedLegacy =
+        media.length === 0 && legacyPhotoUrls.length > 0
+          ? [...(existing.photoUrls || []), ...legacyPhotoUrls]
+          : existing.photoUrls;
+
+      const sessionMeta = serializeSessionMeta({
+        startedAt: existing.startedAt || reportedAt,
+        completedAt: isFullyDone ? reportedAt : undefined,
+        media: mergedMedia.length > 0 ? mergedMedia : undefined,
+        photoUrls: mergedMedia.length === 0 && mergedLegacy && mergedLegacy.length > 0 ? mergedLegacy : undefined,
+        employeeNotes: body.actualNotes || body.employeeNotes || existing.employeeNotes || null,
+        progressReports,
         ...(meterKind && meterReading != null ? { meterReading, meterKind } : {}),
       });
 
       const hasMedia = media.length > 0 || legacyPhotoUrls.length > 0;
       const needsReview =
-        Math.abs(reported - Number(task.plannedQuantity)) > 0.01 || hasMedia || Boolean(body.actualNotes);
+        !isFullyDone ||
+        Math.abs(newTotal - planned) > QUANTITY_EPS ||
+        hasMedia ||
+        Boolean(body.actualNotes);
 
       const updated = await prisma.fieldTask.update({
         where: { id: body.id },
         data: {
-          reportedQuantity: reported,
+          reportedQuantity: newTotal,
           actualNotes: sessionMeta,
-          status: "COMPLETED",
-          completedAt: new Date(),
-          approvalStatus: needsReview ? "PENDING" : "APPROVED",
+          // Partial progress stays IN_PROGRESS ("בטיפול") until planned qty is met
+          status: isFullyDone ? "COMPLETED" : "IN_PROGRESS",
+          completedAt: isFullyDone ? new Date() : null,
+          approvalStatus: isFullyDone ? (needsReview ? "PENDING" : "APPROVED") : "PENDING",
         },
         include: {
           assignee: { select: { id: true, firstName: true, lastName: true } },
@@ -285,10 +353,10 @@ export async function PATCH(req: NextRequest) {
           customerName: task.customerName,
           plotName: task.plotName,
           quantityUnit: task.quantityUnit,
-          acresWorked: reported,
-          plannedQuantity: Number(task.plannedQuantity),
-          reportedQuantity: reported,
-          approvalStatus: needsReview ? "PENDING" : "APPROVED",
+          acresWorked: increment,
+          plannedQuantity: planned,
+          reportedQuantity: newTotal,
+          approvalStatus: isFullyDone ? (needsReview ? "PENDING" : "APPROVED") : "PENDING",
           notes: body.actualNotes || stripTaskTags(task.taskDescription) || task.taskDescription,
           createdById: user.id,
           syncStatus: "SYNCED",

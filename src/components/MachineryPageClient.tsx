@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Plus, Smartphone, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
@@ -156,14 +155,6 @@ export function MachineryPageClient() {
           <span className="text-xs font-semibold text-primary mr-auto">
             {data ? `${cards.length} כרטסות · סה״כ ${data.grandTotal.toLocaleString("he-IL")}` : ""}
           </span>
-          <Link
-            href="/employee/machinery"
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <Smartphone className="h-3.5 w-3.5" />
-            רישום שטח
-          </Link>
         </DateRangeFilter>
       }
     >
@@ -174,7 +165,7 @@ export function MachineryPageClient() {
       ) : tab === "edit" ? (
         <div className="space-y-4">
           <p className="text-sm text-muted">
-            לחץ על עיפרון בכרטסת לעריכה, או הוסף רשומה חדשה מממשק השטח.
+            לחץ על עיפרון בכרטסת לעריכה. דיווחי שטח מתקבלים מממשק העובד.
           </p>
           <div className="work-card-grid">
             {cards.map((log) => (

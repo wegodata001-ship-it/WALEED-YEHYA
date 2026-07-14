@@ -46,7 +46,7 @@ export default function EmployeeTaskHistoryPage() {
       if (statusFilter === "COMPLETED") {
         params.set("statuses", "COMPLETED");
       } else {
-        params.set("statuses", "ASSIGNED,IN_PROGRESS,COMPLETED");
+        params.set("statuses", "ASSIGNED,IN_PROGRESS,AWAITING_COMPLETION,COMPLETED");
       }
       const res = await fetch(`/api/tasks?${params}`);
       const data = await res.json();

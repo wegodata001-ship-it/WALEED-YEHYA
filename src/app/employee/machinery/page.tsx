@@ -196,9 +196,79 @@ export default function MobileMachineryPage() {
   }
 
   return (
-    <EmployeeShell title="יומן עבודה" subtitle="מכונה · ישוב · לקוח · חלקה · כמות">
+    <EmployeeShell title="יומן עבודה" subtitle="לקוח · ישוב · חלקה · חומר · כמות · מכונה">
       <form onSubmit={submit} className="space-y-4">
-        <PhotoCapture onCapture={setPhotoUrl} photoUrl={photoUrl} label="צילום מהשטח (אופציונלי)" />
+        <Field label="לקוח" required>
+          <input
+            required
+            value={form.customerName}
+            onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+            className="field-input"
+            placeholder="שם לקוח — גם חדש"
+          />
+        </Field>
+
+        <Field label="ישוב" required>
+          <input
+            required
+            value={form.settlement}
+            onChange={(e) => setForm({ ...form, settlement: e.target.value })}
+            className="field-input"
+            placeholder="כפר יחזקאל, בית שאן..."
+          />
+        </Field>
+
+        <Field label="חלקה">
+          <input
+            value={form.plotName}
+            onChange={(e) => setForm({ ...form, plotName: e.target.value })}
+            className="field-input"
+            placeholder="הקלד חלקה חדשה או קיימת"
+            list="plots-list"
+          />
+          <datalist id="plots-list">
+            {lookup.plots.map((p) => (
+              <option key={p.id} value={p.nameHe || p.name} />
+            ))}
+          </datalist>
+        </Field>
+
+        <Field label="חומר">
+          <select
+            value={form.materialType}
+            onChange={(e) => setForm({ ...form, materialType: e.target.value })}
+            className="field-input"
+          >
+            <option value="">ללא / לא רלוונטי</option>
+            {Object.entries(MATERIAL_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="כמות" required>
+            <input
+              type="number"
+              step="0.1"
+              required
+              value={form.acresWorked}
+              onChange={(e) => setForm({ ...form, acresWorked: e.target.value })}
+              className="field-input text-lg font-bold"
+            />
+          </Field>
+          <Field label="יחידה">
+            <select
+              value={form.quantityUnit}
+              onChange={(e) => setForm({ ...form, quantityUnit: e.target.value })}
+              className="field-input"
+            >
+              {Object.entries(QUANTITY_UNIT_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
 
         <Field label="מכונה / יחידה" required>
           <select
@@ -301,79 +371,6 @@ export default function MobileMachineryPage() {
           </div>
         )}
 
-        <Field label="ישוב" required>
-          <input
-            required
-            value={form.settlement}
-            onChange={(e) => setForm({ ...form, settlement: e.target.value })}
-            className="field-input"
-            placeholder="כפר יחזקאל, בית שאן..."
-          />
-        </Field>
-
-        <Field label="לקוח" required>
-          <input
-            required
-            value={form.customerName}
-            onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-            className="field-input"
-            placeholder="שם לקוח — גם חדש"
-          />
-        </Field>
-
-        <Field label="חלקה">
-          <input
-            value={form.plotName}
-            onChange={(e) => setForm({ ...form, plotName: e.target.value })}
-            className="field-input"
-            placeholder="הקלד חלקה חדשה או קיימת"
-            list="plots-list"
-          />
-          <datalist id="plots-list">
-            {lookup.plots.map((p) => (
-              <option key={p.id} value={p.nameHe || p.name} />
-            ))}
-          </datalist>
-          <p className="text-[11px] text-muted mt-1">אין צורך לבחור מרשימה — אפשר לרשום חלקה חדשה</p>
-        </Field>
-
-        <Field label="חומר">
-          <select
-            value={form.materialType}
-            onChange={(e) => setForm({ ...form, materialType: e.target.value })}
-            className="field-input"
-          >
-            <option value="">ללא / לא רלוונטי</option>
-            {Object.entries(MATERIAL_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="כמות" required>
-            <input
-              type="number"
-              step="0.1"
-              required
-              value={form.acresWorked}
-              onChange={(e) => setForm({ ...form, acresWorked: e.target.value })}
-              className="field-input text-lg font-bold"
-            />
-          </Field>
-          <Field label="יחידה">
-            <select
-              value={form.quantityUnit}
-              onChange={(e) => setForm({ ...form, quantityUnit: e.target.value })}
-              className="field-input"
-            >
-              {Object.entries(QUANTITY_UNIT_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
         {isBaler && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="סוג אשכול">
@@ -420,6 +417,8 @@ export default function MobileMachineryPage() {
             className="field-input min-h-[80px]"
           />
         </Field>
+
+        <PhotoCapture onCapture={setPhotoUrl} photoUrl={photoUrl} label="צילום מהשטח (אופציונלי)" />
 
         <button
           type="submit"

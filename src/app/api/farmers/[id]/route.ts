@@ -52,3 +52,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "שגיאה בעדכון לקוח" }, { status: 500 });
   }
 }
+
+/** Soft-delete: deactivate farmer. No hard delete. */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await requireManager();
+    const { id } = await params;
+    const org = await getDefaultOrg();
+
+    const existing = await prisma.farmer.findFirst({
+      where: { id, organizationId: org.id },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "לקוח לא נמצא" }, { status: 404 });
+    }
+
+    const farmer = await prisma.farmer.update({
+      where: { id },
+      data: { isActive: false },
+      include: { moshav: { select: { id: true, name: true, nameHe: true } } },
+    });
+
+    return NextResponse.json(farmer);
+  } catch (e) {
+    if (e instanceof ApiAuthError) return handleApiAuth(e);
+    console.error(e);
+    return NextResponse.json({ error: "שגיאה במחיקת לקוח" }, { status: 500 });
+  }
+}

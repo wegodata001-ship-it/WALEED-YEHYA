@@ -39,3 +39,46 @@ export function isStoragePath(value: string): boolean {
   }
   return value.includes("/");
 }
+
+/**
+ * Normalize DB/path values before Storage API calls.
+ * Strips accidental bucket prefix (e.g. photo-buc/tasks/... → tasks/...).
+ */
+export function normalizeStoragePath(raw: string, bucket = process.env.SUPABASE_STORAGE_BUCKET || "photo-buc"): string {
+  let p = String(raw || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+  if (!p) return "";
+  if (p.startsWith(`${bucket}/`)) p = p.slice(bucket.length + 1);
+  if (p.includes("..") || p.includes("\0")) {
+    throw new Error("נתיב אחסון לא תקין");
+  }
+  return p;
+}
+
+/** Same-origin URL used by <img>/<video> so the browser never hits Supabase directly. */
+export function storageMediaProxyUrl(path: string): string {
+  const normalized = normalizeStoragePath(path);
+  return `/api/storage/media?path=${encodeURIComponent(normalized)}`;
+}
+
+/**
+ * Resolve a usable browser src for task/employee media.
+ * - Legacy http(s) or /uploads paths pass through
+ * - Storage object paths use the authenticated same-origin proxy
+ */
+export function resolveMediaDisplayUrl(path: string): string {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("/")) {
+    return path;
+  }
+  if (isStoragePath(path) || path.includes("/")) {
+    try {
+      return storageMediaProxyUrl(path);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}

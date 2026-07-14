@@ -15,8 +15,8 @@ export function FleetTabsClient({ initialVehicles }: { initialVehicles: VehicleR
 
   return (
     <DepartmentLayout
-      title="כלי רכב"
-      subtitle="רישום צי · טסט · ביטוח · יומן טיפולים"
+      title="כלי רכב ומכונות"
+      subtitle="רכבים · מכונות · בעלות · טסט · ביטוח"
       tabs={TABS}
       activeTab={tab}
       onTabChange={setTab}

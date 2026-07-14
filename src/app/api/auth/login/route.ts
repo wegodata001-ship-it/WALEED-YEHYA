@@ -7,10 +7,11 @@ import {
   setSessionCookie,
   defaultPathForRole,
 } from "@/lib/auth";
+import { safeRedirectForRole } from "@/lib/permissions";
 
 export async function POST(req: NextRequest) {
   try {
-    const { phone, password } = await req.json();
+    const { phone, password, next } = await req.json();
     if (!phone || !password) {
       return NextResponse.json({ error: "נדרשים טלפון וסיסמה" }, { status: 400 });
     }
@@ -44,6 +45,11 @@ export async function POST(req: NextRequest) {
     });
     await setSessionCookie(token);
 
+    const redirectTo = safeRedirectForRole(
+      user.role,
+      typeof next === "string" ? next : null
+    ) || defaultPathForRole(user.role);
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -53,7 +59,7 @@ export async function POST(req: NextRequest) {
         phone: user.phone,
         employeeId: user.employeeId,
       },
-      redirectTo: defaultPathForRole(user.role),
+      redirectTo,
     });
   } catch (e) {
     console.error(e);

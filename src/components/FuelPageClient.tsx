@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Plus, Smartphone, Table2, List, Loader2 } from "lucide-react";
+import { Table2, List, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppNav";
 import { FuelGridClient } from "@/components/FuelGridClient";
 import { FUEL_SOURCE_LABELS, FUEL_RECIPIENT_LABELS } from "@/lib/constants";
@@ -98,14 +97,6 @@ export function FuelPageClient() {
             <List className="h-4 w-4" /> רשימת תדלוקים
           </button>
         </div>
-        <Link
-          href="/employee/fuel"
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white"
-        >
-          <Plus className="h-4 w-4" />
-          <Smartphone className="h-4 w-4" />
-          רישום שטח
-        </Link>
       </div>
 
       {!loading && sources.length > 0 && (
