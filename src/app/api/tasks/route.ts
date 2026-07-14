@@ -188,10 +188,11 @@ export async function PATCH(req: NextRequest) {
     });
     if (!task) return NextResponse.json({ error: "סידור עבודה לא נמצא" }, { status: 404 });
 
-    const isStartOrComplete = body.action === "start" || body.action === "complete";
+    const isEmployeeTaskAction =
+      body.action === "start" || body.action === "complete" || body.action === "progress";
     const isManagerAction = body.action === "approve" || body.action === "adjust";
 
-    if (isStartOrComplete) {
+    if (isEmployeeTaskAction) {
       if (isEmployeeRole(user.role)) {
         if (!user.employeeId || task.assigneeId !== user.employeeId) {
           throw new ApiAuthError(403, "אין הרשאה");
