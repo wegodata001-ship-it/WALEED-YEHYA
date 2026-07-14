@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { FuelSection } from "@/components/dept/FuelSection";
@@ -192,9 +193,7 @@ export function OperationsDeptClient() {
       }
     >
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        </div>
+        <SmallLoader />
       ) : tab === "fuel" ? (
         <FuelSection
           sources={sources}

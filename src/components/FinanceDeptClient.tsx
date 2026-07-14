@@ -1,7 +1,9 @@
 "use client";
 
+import { LoadingArea } from "@/components/ui/SmallLoader";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { AccountsSection } from "@/components/dept/AccountsSection";
@@ -172,9 +174,7 @@ export function FinanceDeptClient() {
       }
     >
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        </div>
+        <LoadingArea label="טוען..." minHeightClass="min-h-[160px]" />
       ) : tab === "entry" ? (
         <form onSubmit={submitEntry} className="work-card p-4 max-w-xl space-y-3">
           <h3 className="font-bold text-primary-dark">רישום תשלום / תקבול</h3>

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppNav";
-import { Loader2, ChevronRight, ChevronLeft, Plus, UserPlus } from "lucide-react";
+import { SmallLoader } from "@/components/ui/SmallLoader";
+import { ChevronRight, ChevronLeft, Plus, UserPlus } from "lucide-react";
 import { QUANTITY_UNIT_LABELS } from "@/lib/constants";
 
 const MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
@@ -98,7 +99,7 @@ export function HrPageClient() {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <SmallLoader />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-card card-shadow">
             <table className="w-full text-sm">

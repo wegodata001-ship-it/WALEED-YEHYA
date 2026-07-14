@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Camera, Loader2, X } from "lucide-react";
+import { Camera, X } from "lucide-react";
+import { InlineLoader } from "@/components/ui/SmallLoader";
 import { isStoragePath } from "@/lib/storage/paths";
 
 type PhotoCaptureProps = {
@@ -87,7 +88,7 @@ export function PhotoCapture({
       ) : (
         <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors">
           {uploading ? (
-            <Loader2 className="h-6 w-6 animate-spin text-muted" />
+            <InlineLoader />
           ) : (
             <>
               <Camera className="h-6 w-6 text-muted mb-1" />

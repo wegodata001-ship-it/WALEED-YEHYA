@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Pencil } from "lucide-react";
 
 export type WorkCardField = { label: string; value: ReactNode };
@@ -19,7 +19,7 @@ type Props = {
   className?: string;
 };
 
-export function WorkCardDetail({
+function WorkCardDetailInner({
   date,
   title,
   subtitle,
@@ -84,3 +84,6 @@ export function WorkCardDetail({
     </Tag>
   );
 }
+
+/** Memoized — schedule/dashboard lists re-render often without card data changes. */
+export const WorkCardDetail = memo(WorkCardDetailInner);

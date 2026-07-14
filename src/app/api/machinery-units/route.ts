@@ -4,25 +4,25 @@ import { getDefaultOrg } from "@/lib/org";
 import { MachineryUnitType } from "@prisma/client";
 import { handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await requireManager();
-  const org = await getDefaultOrg();
-  const includeInactive = false;
-  const units = await prisma.machineryUnit.findMany({
-    where: { organizationId: org.id, ...(includeInactive ? {} : { isActive: true }) },
-    orderBy: { sortOrder: "asc" },
-    select: {
-      id: true,
-      name: true,
-      unitType: true,
-      unitNumber: true,
-      headerColor: true,
-      sortOrder: true,
-      isActive: true,
-    },
-  });
-  return NextResponse.json(units);
+    const org = await getDefaultOrg();
+    const includeInactive = new URL(req.url).searchParams.get("all") === "true";
+    const units = await prisma.machineryUnit.findMany({
+      where: { organizationId: org.id, ...(includeInactive ? {} : { isActive: true }) },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        name: true,
+        unitType: true,
+        unitNumber: true,
+        headerColor: true,
+        sortOrder: true,
+        isActive: true,
+      },
+    });
+    return NextResponse.json(units);
   } catch (e) {
     return handleApiAuth(e);
   }

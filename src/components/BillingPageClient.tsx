@@ -1,8 +1,10 @@
 "use client";
 
+import { LoadingArea } from "@/components/ui/SmallLoader";
+
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppNav";
-import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronRight, ChevronLeft } from "lucide-react";
 
 const MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 
@@ -62,7 +64,7 @@ export function BillingPageClient() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <LoadingArea label="טוען..." minHeightClass="min-h-[160px]" />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-card card-shadow">
             <table className="w-full text-sm">

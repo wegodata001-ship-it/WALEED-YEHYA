@@ -17,6 +17,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { SYNC_LABELS } from "@/lib/constants";
 
 const MONTHS = [
@@ -81,17 +82,18 @@ export function DashboardClient() {
   const [fuelLevels, setFuelLevels] = useState<{ name: string; current: number; capacity: number | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = mode === "today" ? "" : `?year=${year}&month=${month}`;
-      const res = await fetch(`/api/dashboard${params}`);
+      const res = await fetch(`/api/dashboard${params}`, { signal });
       if (!res.ok) throw new Error("failed");
       const data = await res.json();
       setStats(data.stats);
       setActivity(data.activity || []);
       setFuelLevels(data.fuelLevels || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
       setStats({
         totalAcres: 0,
         totalFuel: 0,
@@ -117,21 +119,16 @@ export function DashboardClient() {
   }, [year, month, mode]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
 
   if (loading || !stats) {
-    return <div className="text-center py-12 text-muted">טוען נתונים...</div>;
+    return <SmallLoader />;
   }
 
   const departments: DeptCard[] = [
-    {
-      href: "/machinery",
-      title: "מכונות",
-      icon: Tractor,
-      primary: `${stats.workLogsCount} יומנים`,
-      secondary: `${stats.totalAcres.toLocaleString("he-IL")} דונם/יח׳`,
-    },
     {
       href: "/operations",
       title: "תפעול",
@@ -153,9 +150,9 @@ export function DashboardClient() {
       href: "/fleet",
       title: "כלי רכב",
       icon: CircleDot,
-      primary: `${stats.vehiclesCount} כלים`,
+      primary: `${stats.vehiclesCount} כלים · ${stats.workLogsCount} יומנים`,
       secondary:
-        stats.expiryAlerts > 0 ? `${stats.expiryAlerts} פקיעות קרובות` : "טסט · ביטוח · טיפולים",
+        stats.expiryAlerts > 0 ? `${stats.expiryAlerts} פקיעות קרובות` : "רכבים · מכונות · טיפולים",
     },
     {
       href: "/customers",
@@ -217,7 +214,7 @@ export function DashboardClient() {
           </>
         )}
         <button
-          onClick={load}
+          onClick={() => load()}
           className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-background"
         >
           <RefreshCw className="h-4 w-4" /> רענן

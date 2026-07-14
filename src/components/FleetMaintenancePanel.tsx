@@ -1,7 +1,9 @@
 "use client";
 
+import { SmallLoader } from "@/components/ui/SmallLoader";
+
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, AlertTriangle, Wrench, Plus, X } from "lucide-react";
+import { AlertTriangle, Wrench, Plus, X } from "lucide-react";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants";
 
@@ -103,7 +105,7 @@ export function FleetMaintenancePanel() {
   if (loading)
     return (
       <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SmallLoader />
       </div>
     );
 

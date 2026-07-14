@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, Play } from "lucide-react";
+import { Play } from "lucide-react";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { EmployeeShell } from "@/components/EmployeeShell";
 import { EmployeeDateFilter } from "@/components/employee/EmployeeDateFilter";
 import { defaultDateRange } from "@/lib/dateRange";
@@ -105,7 +106,7 @@ export default function EmployeeMyAttendancePage() {
         </div>
 
         {loading ? (
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <SmallLoader />
         ) : records.length === 0 ? (
           <p className="text-center text-muted py-12">אין רישומי נוכחות בטווח שנבחר</p>
         ) : (

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import {
   EmployeesRegisterSection,
@@ -56,14 +56,15 @@ export function EmployeesDeptClient() {
   const [msg, setMsg] = useState("");
   const [empForm, setEmpForm] = useState(emptyEmployeeForm);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const dq = dateRangeQuery(range).toString();
+      const opts = signal ? { signal } : {};
       const [empRes, empListRes, attRes] = await Promise.all([
-        fetch(`/api/reports/employees?${dq}`),
-        fetch("/api/employees"),
-        fetch(`/api/attendance?${dq}`),
+        fetch(`/api/reports/employees?${dq}`, opts),
+        fetch("/api/employees", opts),
+        fetch(`/api/attendance?${dq}`, opts),
       ]);
       const [empReport, empList, attData] = await Promise.all([
         empRes.json(),
@@ -107,13 +108,17 @@ export function EmployeesDeptClient() {
       } else {
         setEmployees((empReport.employees || []).map(normalizeEmployee));
       }
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
     } finally {
       setLoading(false);
     }
   }, [range]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
 
   const filteredDays = useMemo(() => {
@@ -248,9 +253,7 @@ export function EmployeesDeptClient() {
       }
     >
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        </div>
+        <SmallLoader />
       ) : tab === "register" ? (
         <EmployeesRegisterSection
           employees={filteredEmployees}

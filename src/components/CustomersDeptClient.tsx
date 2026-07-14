@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { CustomersRegisterSection, CustomersCardSection } from "@/components/dept/CustomersSections";
 import type { ClientRow, DayRow, FarmerRow, FieldTaskRow } from "@/components/dept/types";
@@ -38,15 +38,16 @@ export function CustomersDeptClient() {
   const [msg, setMsg] = useState("");
   const [form, setForm] = useState(emptyFarmerForm);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const dq = dateRangeQuery(range).toString();
+      const opts = signal ? { signal } : {};
       const [farmersRes, clientsRes, empRes, tasksRes] = await Promise.all([
-        fetch("/api/farmers"),
-        fetch(`/api/reports/clients?${dq}&groupBy=customer`),
-        fetch(`/api/reports/employees?${dq}`),
-        fetch(`/api/tasks?${dq}`),
+        fetch("/api/farmers", opts),
+        fetch(`/api/reports/clients?${dq}&groupBy=customer`, opts),
+        fetch(`/api/reports/employees?${dq}`, opts),
+        fetch(`/api/tasks?${dq}`, opts),
       ]);
       const [farmersData, clientsData, empReport, tasksData] = await Promise.all([
         farmersRes.json(),
@@ -58,13 +59,17 @@ export function CustomersDeptClient() {
       setClientRows(clientsData.rows || []);
       setDays(empReport.days || []);
       setTasks(Array.isArray(tasksData) ? tasksData : []);
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
     } finally {
       setLoading(false);
     }
   }, [range]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
 
   const pendingTasks = tasks.filter((t) => t.approvalStatus === "PENDING" && t.status === "COMPLETED");
@@ -203,9 +208,7 @@ export function CustomersDeptClient() {
       }
     >
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        </div>
+        <SmallLoader />
       ) : tab === "register" ? (
         <CustomersRegisterSection
           farmers={filteredFarmers}

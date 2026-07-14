@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { EmployeeShell } from "@/components/EmployeeShell";
 import { EmployeeDateFilter } from "@/components/employee/EmployeeDateFilter";
 import {
@@ -107,7 +107,7 @@ export default function EmployeeTaskHistoryPage() {
         </div>
 
         {loading ? (
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <SmallLoader />
         ) : filtered.length === 0 ? (
           <p className="text-center text-muted py-12">אין משימות בטווח שנבחר</p>
         ) : (

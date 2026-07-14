@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Check, Loader2, RotateCcw, X } from "lucide-react";
+import { Camera, Check, RotateCcw, X } from "lucide-react";
+import { InlineLoader } from "@/components/ui/SmallLoader";
 
 const HAVE_ENOUGH_DATA = 4;
 
@@ -307,7 +308,7 @@ export function AttendanceCameraCapture({ open, onClose, onApproved }: Attendanc
 
           {(phase === "opening" || phase === "capturing" || phase === "uploading") && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white gap-2">
-              <Loader2 className="h-8 w-8 animate-spin" />
+              <InlineLoader className="!border-white/30 !border-t-white" />
               <p className="text-sm font-semibold">{statusText || "טוען..."}</p>
             </div>
           )}

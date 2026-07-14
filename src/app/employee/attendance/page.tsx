@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, LogOut, Play, Clock, History } from "lucide-react";
+import { CheckCircle2, LogOut, Play, Clock, History } from "lucide-react";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { EmployeeShell } from "@/components/EmployeeShell";
 
@@ -141,7 +142,7 @@ export default function EmployeeAttendancePage() {
   if (loading) {
     return (
       <EmployeeShell title="נוכחות" subtitle="טוען...">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <SmallLoader />
       </EmployeeShell>
     );
   }
@@ -162,7 +163,7 @@ export default function EmployeeAttendancePage() {
                 onClick={startDay}
                 className="w-full rounded-2xl bg-emerald-600 text-white py-6 font-extrabold text-xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] transition-transform"
               >
-                {busy ? <Loader2 className="h-7 w-7 animate-spin" /> : <Play className="h-7 w-7" />}
+                {busy ? <InlineLoader className="h-7 w-7" /> : <Play className="h-7 w-7" />}
                 התחל יום עבודה
               </button>
             </div>
@@ -194,7 +195,7 @@ export default function EmployeeAttendancePage() {
               onClick={endDay}
               className="w-full rounded-2xl bg-primary-dark text-white py-6 font-extrabold text-xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] transition-transform"
             >
-              {busy ? <Loader2 className="h-7 w-7 animate-spin" /> : <LogOut className="h-7 w-7" />}
+              {busy ? <InlineLoader className="h-7 w-7" /> : <LogOut className="h-7 w-7" />}
               סיים יום עבודה
             </button>
           </div>

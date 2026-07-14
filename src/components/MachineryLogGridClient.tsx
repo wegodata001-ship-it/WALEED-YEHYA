@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { MACHINERY_UNIT_LABELS, MATERIAL_LABELS, QUANTITY_UNIT_LABELS } from "@/lib/constants";
 
 type Unit = {
@@ -175,12 +176,7 @@ export function MachineryLogGridClient({ initialYear, initialMonth }: { initialY
   };
 
   if (loading || !data) {
-    return (
-      <div className="flex items-center justify-center py-16 text-muted">
-        <Loader2 className="h-6 w-6 animate-spin ml-2" />
-        טוען יומן עבודה...
-      </div>
-    );
+    return <SmallLoader label="טוען יומן עבודה..." />;
   }
 
   const filters = [

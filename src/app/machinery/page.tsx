@@ -1,7 +1,6 @@
-import { MachineryPageClient } from "@/components/MachineryPageClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function MachineryAdminPage() {
-  return <MachineryPageClient />;
+/** Legacy route — machinery registry & journal live under /fleet */
+export default function MachineryAdminRedirect() {
+  redirect("/fleet?tab=journal");
 }

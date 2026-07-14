@@ -45,10 +45,11 @@ export async function GET() {
         orderBy: { name: "asc" },
         select: { id: true, name: true, nameHe: true, sku: true },
       }),
+      // Limited scan for legacy free-text values only — avoid loading full history
       prisma.fieldTask.findMany({
         where: { organizationId: org.id },
-        select: { settlement: true, plotName: true, customerName: true, taskDescription: true },
-        take: 500,
+        select: { settlement: true, plotName: true, taskDescription: true },
+        take: 80,
         orderBy: { createdAt: "desc" },
       }),
     ]);

@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppNav";
-import { DashboardClient } from "@/components/DashboardClient";
+import { DashboardLazy } from "@/components/lazy/DeptLazy";
 
 export default function HomePage() {
   return (
@@ -11,7 +11,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <DashboardClient />
+      <DashboardLazy />
     </AppShell>
   );
 }

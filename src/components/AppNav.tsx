@@ -17,7 +17,6 @@ import {
 const NAV = [
   { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
   { href: "/schedule", label: "סידור עבודה", icon: CalendarDays },
-  { href: "/machinery", label: "מכונות", icon: Tractor },
   { href: "/operations", label: "תפעול", icon: Briefcase },
   { href: "/finance", label: "כספים", icon: Wallet },
   { href: "/fleet", label: "כלי רכב", icon: CircleDot },
@@ -39,6 +38,9 @@ function isActive(pathname: string, href: string) {
   }
   if (href === "/customers") {
     return pathname.startsWith("/customers");
+  }
+  if (href === "/fleet") {
+    return pathname.startsWith("/fleet") || pathname.startsWith("/machinery");
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }

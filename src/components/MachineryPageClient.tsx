@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { DepartmentLayout } from "@/components/DepartmentLayout";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { MACHINERY_UNIT_LABELS, MATERIAL_LABELS, QUANTITY_UNIT_LABELS } from "@/lib/constants";
@@ -46,7 +47,7 @@ const TABS = [
   { id: "edit", label: "רישום ועריכה" },
 ];
 
-export function MachineryPageClient() {
+export function MachineryPageClient({ embedded }: { embedded?: boolean }) {
   const [tab, setTab] = useState("journal");
   const [range, setRange] = useState<DateRangeState>(defaultDateRange(2024, 4));
   const [unitFilter, setUnitFilter] = useState("ALL");
@@ -129,39 +130,32 @@ export function MachineryPageClient() {
     }
   };
 
-  return (
-    <DepartmentLayout
-      title="מכונות"
-      subtitle="יומן עבודה · רישום ועריכה לפי מכונה"
-      tabs={TABS}
-      activeTab={tab}
-      onTabChange={setTab}
-      filter={
-        <DateRangeFilter
-          value={range}
-          onChange={setRange}
-          search={q}
-          onSearchChange={setQ}
-          searchPlaceholder="חיפוש נהג / ישוב / לקוח / חלקה"
-        >
-          <select value={unitFilter} onChange={(e) => setUnitFilter(e.target.value)}>
-            <option value="ALL">כל המכונות</option>
-            {Object.entries(MACHINERY_UNIT_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs font-semibold text-primary mr-auto">
-            {data ? `${cards.length} כרטסות · סה״כ ${data.grandTotal.toLocaleString("he-IL")}` : ""}
-          </span>
-        </DateRangeFilter>
-      }
+  const filterBar = (
+    <DateRangeFilter
+      value={range}
+      onChange={setRange}
+      search={q}
+      onSearchChange={setQ}
+      searchPlaceholder="חיפוש נהג / ישוב / לקוח / חלקה"
     >
+      <select value={unitFilter} onChange={(e) => setUnitFilter(e.target.value)}>
+        <option value="ALL">כל המכונות</option>
+        {Object.entries(MACHINERY_UNIT_LABELS).map(([k, v]) => (
+          <option key={k} value={k}>
+            {v}
+          </option>
+        ))}
+      </select>
+      <span className="text-xs font-semibold text-primary mr-auto">
+        {data ? `${cards.length} כרטסות · סה״כ ${data.grandTotal.toLocaleString("he-IL")}` : ""}
+      </span>
+    </DateRangeFilter>
+  );
+
+  const body = (
+    <>
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        </div>
+        <SmallLoader />
       ) : tab === "edit" ? (
         <div className="space-y-4">
           <p className="text-sm text-muted">
@@ -266,13 +260,58 @@ export function MachineryPageClient() {
             <button
               type="submit"
               disabled={saving}
-              className="w-full rounded-md bg-primary py-2.5 text-white font-bold disabled:opacity-50"
+              className="w-full rounded-md bg-primary py-2.5 text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {saving ? "שומר..." : "שמור שינויים"}
+              {saving ? (
+                <>
+                  <InlineLoader />
+                  שומר...
+                </>
+              ) : (
+                "שמור שינויים"
+              )}
             </button>
           </form>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold border ${
+                tab === t.id
+                  ? "bg-primary text-white border-primary"
+                  : "bg-card border-border hover:border-primary/40"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {filterBar}
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <DepartmentLayout
+      title="יומן עבודה"
+      subtitle="יומן עבודה · רישום ועריכה לפי מכונה"
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      filter={filterBar}
+    >
+      {body}
     </DepartmentLayout>
   );
 }

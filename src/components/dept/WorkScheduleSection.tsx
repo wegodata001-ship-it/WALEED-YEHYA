@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { SearchableSelect, type SelectOption } from "@/components/SearchableSelect";
@@ -17,11 +18,18 @@ import { TaskMediaViewer } from "@/components/storage/TaskMediaViewer";
 import { buildFieldTaskDetailFields, quantityCompletionBadge } from "@/components/dept/field-task-fields";
 import { SCHEDULE_QUANTITY_UNITS } from "@/lib/constants";
 import { normalizeLabel } from "@/lib/master-data";
+import { VEHICLE_OWNERSHIP_LABELS } from "@/lib/vehicle-ownership";
 import type { FieldTaskRow } from "@/components/dept/types";
 
 type Lookup = {
   employees: { id: string; firstName: string; lastName: string }[];
-  vehicles: { id: string; licensePlate: string; make: string | null; model: string | null }[];
+  vehicles: {
+    id: string;
+    licensePlate: string;
+    make: string | null;
+    model: string | null;
+    ownership?: "COMPANY" | "CONTRACTOR";
+  }[];
   machineryUnits: { id: string; name: string }[];
 };
 
@@ -86,8 +94,8 @@ export function WorkScheduleSection() {
   const [filterMachineryUnitId, setFilterMachineryUnitId] = useState("");
   const [msg, setMsg] = useState("");
 
-  const loadMaster = useCallback(async () => {
-    const res = await fetch("/api/master-data");
+  const loadMaster = useCallback(async (signal?: AbortSignal) => {
+    const res = await fetch("/api/master-data", { signal });
     const data = await res.json();
     if (res.ok) {
       setMaster({
@@ -99,14 +107,14 @@ export function WorkScheduleSection() {
     }
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const dq = dateRangeQuery(range).toString();
+      // Defer master-data until form open — schedule list only needs tasks + lookup
       const [tasksRes, lookupRes] = await Promise.all([
-        fetch(`/api/tasks?${dq}`),
-        fetch("/api/lookup"),
-        loadMaster(),
+        fetch(`/api/tasks?${dq}`, { signal }),
+        fetch("/api/lookup?scope=schedule", { signal }),
       ]);
       const [tasksData, lookupData] = await Promise.all([tasksRes.json(), lookupRes.json()]);
       setTasks(Array.isArray(tasksData) ? tasksData : []);
@@ -115,14 +123,25 @@ export function WorkScheduleSection() {
         vehicles: lookupData.vehicles || [],
         machineryUnits: lookupData.machineryUnits || [],
       });
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
     } finally {
       setLoading(false);
     }
-  }, [range, loadMaster]);
+  }, [range]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const ac = new AbortController();
+    loadMaster(ac.signal).catch(() => {});
+    return () => ac.abort();
+  }, [showForm, loadMaster]);
 
   const customerOpts: SelectOption[] = useMemo(
     () => master.customers.map((c) => ({ id: c.id, label: c.name })),
@@ -143,10 +162,11 @@ export function WorkScheduleSection() {
   const vehicleOpts: SelectOption[] = useMemo(
     () => [
       { id: "", label: "ללא" },
-      ...lookup.vehicles.map((v) => ({
-        id: v.id,
-        label: v.model ? `${v.licensePlate} · ${v.model}` : v.licensePlate,
-      })),
+      ...lookup.vehicles.map((v) => {
+        const ownership = VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"];
+        const base = v.model ? `${v.licensePlate} · ${v.model}` : v.licensePlate;
+        return { id: v.licensePlate, label: `${ownership} · ${base}` };
+      }),
     ],
     [lookup.vehicles]
   );
@@ -364,9 +384,7 @@ export function WorkScheduleSection() {
       </div>
 
       {loading ? (
-        <div className="py-16 text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-        </div>
+        <SmallLoader />
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted py-10 text-center">אין סידורי עבודה בטווח שנבחר</p>
       ) : (
@@ -608,9 +626,16 @@ export function WorkScheduleSection() {
             <button
               type="submit"
               disabled={saving}
-              className="w-full rounded-xl bg-primary py-3 text-white font-extrabold disabled:opacity-50"
+              className="w-full rounded-xl bg-primary py-3 text-white font-extrabold disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
-              {saving ? "שומר..." : "שמור סידור עבודה"}
+              {saving ? (
+                <>
+                  <InlineLoader />
+                  שומר...
+                </>
+              ) : (
+                "שמור סידור עבודה"
+              )}
             </button>
           </form>
         </div>

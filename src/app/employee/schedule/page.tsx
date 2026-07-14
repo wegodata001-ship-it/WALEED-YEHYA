@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { EmployeeShell } from "@/components/EmployeeShell";
-import { CheckCircle2, Loader2, Play, Square } from "lucide-react";
+import { CheckCircle2, Play, Square } from "lucide-react";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 import {
   formatTaskDate,
   formatTaskTime,
@@ -278,7 +279,7 @@ export default function EmployeeSchedulePage() {
   if (loading) {
     return (
       <EmployeeShell title="סידור העבודה שלי" subtitle="טוען...">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <SmallLoader />
       </EmployeeShell>
     );
   }
@@ -426,9 +427,21 @@ export default function EmployeeSchedulePage() {
           <button
             type="submit"
             disabled={busy || mediaBusy}
-            className="w-full rounded-xl bg-emerald-600 py-4 text-white font-extrabold text-lg disabled:opacity-50"
+            className="w-full rounded-xl bg-emerald-600 py-4 text-white font-extrabold text-lg disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {busy ? "שולח..." : mediaBusy ? "מעלה מדיה..." : "שלח דיווח ביצוע"}
+            {busy ? (
+              <>
+                <InlineLoader />
+                שולח...
+              </>
+            ) : mediaBusy ? (
+              <>
+                <InlineLoader />
+                מעלה מדיה...
+              </>
+            ) : (
+              "שלח דיווח ביצוע"
+            )}
           </button>
           <button type="button" onClick={cancelReport} className="w-full rounded-xl border border-border py-3 font-bold">
             ביטול

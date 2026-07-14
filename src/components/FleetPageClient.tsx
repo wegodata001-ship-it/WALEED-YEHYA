@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CircleDot, Eye, Plus, Trash2, RefreshCw, Search, X } from "lucide-react";
+import { CircleDot, Eye, Plus, Trash2, RefreshCw, Search, X, Pencil } from "lucide-react";
 import { CrudModal } from "@/components/CrudModal";
-import { WorkCardDetail } from "@/components/WorkCardDetail";
+import { InlineLoader } from "@/components/ui/SmallLoader";
 import { VEHICLE_TYPE_LABELS, VEHICLE_STATUS_LABELS, MACHINERY_UNIT_LABELS } from "@/lib/constants";
 import { formatDateIL, toInputDate, vehicleRowAlert } from "@/lib/vehicle-utils";
 import { VEHICLE_OWNERSHIP_LABELS, type VehicleOwnership } from "@/lib/vehicle-ownership";
@@ -39,6 +39,28 @@ type MachineryRow = {
   unitNumber: string | null;
   isActive?: boolean;
 };
+
+type TypeFilter = "all" | "COMPANY" | "CONTRACTOR" | "MACHINE";
+
+type UnifiedRow =
+  | {
+      key: string;
+      kind: "vehicle";
+      typeLabel: string;
+      name: string;
+      number: string;
+      statusLabel: string;
+      vehicle: VehicleRow;
+    }
+  | {
+      key: string;
+      kind: "machine";
+      typeLabel: string;
+      name: string;
+      number: string;
+      statusLabel: string;
+      machine: MachineryRow;
+    };
 
 const emptyVehicle = (): Record<string, unknown> => ({
   licensePlate: "",
@@ -97,6 +119,13 @@ const vehicleFields = [
   { key: "notes", label: "הערות", type: "textarea" as const, colSpan: 2 as const },
 ];
 
+const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
+  { id: "all", label: "הכל" },
+  { id: "COMPANY", label: "רכבי חברה" },
+  { id: "CONTRACTOR", label: "רכבי קבלן" },
+  { id: "MACHINE", label: "מכונות" },
+];
+
 function serialize(v: VehicleRow): Record<string, unknown> {
   return {
     licensePlate: v.licensePlate,
@@ -144,13 +173,6 @@ function normalizeVehicle(v: Record<string, unknown>): VehicleRow {
   };
 }
 
-function alertClass(alert: ReturnType<typeof vehicleRowAlert>) {
-  if (alert === "sold") return "border-danger/50";
-  if (alert === "expired") return "border-orange-400";
-  if (alert === "warning") return "border-amber-300";
-  return "";
-}
-
 export function FleetPageClient({
   initialVehicles,
   embedded,
@@ -158,15 +180,19 @@ export function FleetPageClient({
   initialVehicles: VehicleRow[];
   embedded?: boolean;
 }) {
-  const [vehicles, setVehicles] = useState(initialVehicles.map((v) => normalizeVehicle(v as unknown as Record<string, unknown>)));
+  const [vehicles, setVehicles] = useState(
+    initialVehicles.map((v) => normalizeVehicle(v as unknown as Record<string, unknown>))
+  );
   const [machines, setMachines] = useState<MachineryRow[]>([]);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [showAll, setShowAll] = useState(true);
   const [addKind, setAddKind] = useState<"choose" | "vehicle" | "machine" | null>(null);
   const [vehicleModal, setVehicleModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
   const [viewingVehicle, setViewingVehicle] = useState<VehicleRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteMachineId, setDeleteMachineId] = useState<string | null>(null);
   const [machineForm, setMachineForm] = useState({ name: "", unitType: "HARVESTER", unitNumber: "" });
   const [editingMachine, setEditingMachine] = useState<MachineryRow | null>(null);
   const [machineModal, setMachineModal] = useState<"add" | "edit" | "view" | null>(null);
@@ -180,10 +206,10 @@ export function FleetPageClient({
   }, [showAll]);
 
   const loadMachines = useCallback(async () => {
-    const res = await fetch("/api/machinery-units");
+    const res = await fetch(`/api/machinery-units?all=${showAll}`);
     const data = await res.json();
     if (Array.isArray(data)) setMachines(data);
-  }, []);
+  }, [showAll]);
 
   useEffect(() => {
     loadVehicles();
@@ -193,23 +219,56 @@ export function FleetPageClient({
     loadMachines();
   }, [loadMachines]);
 
-  const filtered = vehicles.filter(
-    (v) =>
-      !search ||
-      v.licensePlate.includes(search) ||
-      v.model?.includes(search) ||
-      v.registeredTo?.includes(search) ||
-      VEHICLE_TYPE_LABELS[v.vehicleType]?.includes(search) ||
-      VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"]?.includes(search)
-  );
+  const rows: UnifiedRow[] = useMemo(() => {
+    const term = search.trim();
+    const vehicleRows: UnifiedRow[] = vehicles
+      .filter((v) => {
+        if (typeFilter === "MACHINE") return false;
+        if (typeFilter === "COMPANY" && (v.ownership || "COMPANY") !== "COMPANY") return false;
+        if (typeFilter === "CONTRACTOR" && v.ownership !== "CONTRACTOR") return false;
+        if (!term) return true;
+        return (
+          v.licensePlate.includes(term) ||
+          !!v.model?.includes(term) ||
+          !!v.make?.includes(term) ||
+          !!v.registeredTo?.includes(term) ||
+          !!VEHICLE_TYPE_LABELS[v.vehicleType]?.includes(term) ||
+          !!VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"]?.includes(term)
+        );
+      })
+      .map((v) => ({
+        key: `v-${v.id}`,
+        kind: "vehicle" as const,
+        typeLabel: VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"],
+        name: v.model || v.make || VEHICLE_TYPE_LABELS[v.vehicleType] || "רכב",
+        number: v.licensePlate,
+        statusLabel: VEHICLE_STATUS_LABELS[v.status] || v.status,
+        vehicle: v,
+      }));
 
-  const filteredMachines = machines.filter(
-    (m) =>
-      !search ||
-      m.name.includes(search) ||
-      MACHINERY_UNIT_LABELS[m.unitType]?.includes(search) ||
-      (m.unitNumber || "").includes(search)
-  );
+    const machineRows: UnifiedRow[] = machines
+      .filter((m) => {
+        if (typeFilter === "COMPANY" || typeFilter === "CONTRACTOR") return false;
+        if (!showAll && m.isActive === false) return false;
+        if (!term) return true;
+        return (
+          m.name.includes(term) ||
+          !!MACHINERY_UNIT_LABELS[m.unitType]?.includes(term) ||
+          (m.unitNumber || "").includes(term)
+        );
+      })
+      .map((m) => ({
+        key: `m-${m.id}`,
+        kind: "machine" as const,
+        typeLabel: "מכונה",
+        name: m.name,
+        number: m.unitNumber || "—",
+        statusLabel: m.isActive === false ? "לא פעילה" : "פעילה",
+        machine: m,
+      }));
+
+    return [...vehicleRows, ...machineRows];
+  }, [vehicles, machines, search, typeFilter, showAll]);
 
   const saveVehicle = async (data: Record<string, unknown>) => {
     if (!data.ownership) throw new Error("ownership required");
@@ -234,7 +293,9 @@ export function FleetPageClient({
     await fetch(`/api/vehicles/${id}`, { method: "DELETE" });
     setDeleteId(null);
     setVehicles((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, isActive: false, status: "RETIRED" } : v)).filter((v) => showAll || v.isActive)
+      prev
+        .map((v) => (v.id === id ? { ...v, isActive: false, status: "RETIRED" } : v))
+        .filter((v) => showAll || v.isActive)
     );
   };
 
@@ -264,7 +325,10 @@ export function FleetPageClient({
     setMachineSaving(true);
     setMachineMsg("");
     try {
-      const url = machineModal === "edit" && editingMachine ? `/api/machinery-units/${editingMachine.id}` : "/api/machinery-units";
+      const url =
+        machineModal === "edit" && editingMachine
+          ? `/api/machinery-units/${editingMachine.id}`
+          : "/api/machinery-units";
       const method = machineModal === "edit" ? "PATCH" : "POST";
       const res = await fetch(url, {
         method,
@@ -277,9 +341,9 @@ export function FleetPageClient({
         return;
       }
       if (machineModal === "add") {
-        setMachines((prev) => [...prev, data]);
+        setMachines((prev) => [...prev, { ...data, isActive: true }]);
       } else {
-        setMachines((prev) => prev.map((m) => (m.id === data.id ? data : m)));
+        setMachines((prev) => prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)));
       }
       setMachineModal(null);
       setAddKind(null);
@@ -291,7 +355,12 @@ export function FleetPageClient({
   const deleteMachine = async (id: string) => {
     const res = await fetch(`/api/machinery-units/${id}`, { method: "DELETE" });
     if (!res.ok) return;
-    setMachines((prev) => prev.filter((m) => m.id !== id));
+    setDeleteMachineId(null);
+    if (showAll) {
+      setMachines((prev) => prev.map((m) => (m.id === id ? { ...m, isActive: false } : m)));
+    } else {
+      setMachines((prev) => prev.filter((m) => m.id !== id));
+    }
   };
 
   return (
@@ -304,20 +373,23 @@ export function FleetPageClient({
                 <CircleDot className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-primary-dark">כלי רכב ומכונות</h1>
+                <h1 className="text-lg font-bold text-primary-dark">כלי רכב</h1>
                 <p className="text-xs text-muted">
-                  {vehicles.length} רכבים · {machines.length} מכונות
+                  {vehicles.filter((v) => v.isActive).length} רכבים · {machines.filter((m) => m.isActive !== false).length}{" "}
+                  מכונות
                 </p>
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
               <button
+                type="button"
                 onClick={openAddChooser}
                 className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white"
               >
                 <Plus className="h-4 w-4" /> הוסף
               </button>
               <button
+                type="button"
                 onClick={() => {
                   loadVehicles();
                   loadMachines();
@@ -334,7 +406,7 @@ export function FleetPageClient({
         </header>
       )}
 
-      <main className={embedded ? "space-y-6" : "mx-auto max-w-[1800px] px-4 py-6 sm:px-6 space-y-6"}>
+      <main className={embedded ? "space-y-4" : "mx-auto max-w-[1800px] px-4 py-6 sm:px-6 space-y-4"}>
         <div className="flex flex-wrap gap-3 items-center">
           {embedded && (
             <button
@@ -342,7 +414,7 @@ export function FleetPageClient({
               onClick={openAddChooser}
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"
             >
-              <Plus className="h-3.5 w-3.5" /> הוסף חדש
+              <Plus className="h-3.5 w-3.5" /> הוסף
             </button>
           )}
           <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -350,124 +422,139 @@ export function FleetPageClient({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="חיפוש רישוי, דגם, מכונה..."
+              placeholder="חיפוש שם / מספר / סוג..."
               className="field-input pr-10"
             />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-            הצג גם נמכרו / לא פעילים
+            הצג גם לא פעילים
           </label>
         </div>
 
-        <section className="space-y-3">
-          <h3 className="text-sm font-extrabold text-primary-dark">כלי רכב</h3>
-          <div className="work-card-grid">
-            {filtered.map((v) => {
-              const alert = vehicleRowAlert(v);
-              return (
-                <WorkCardDetail
-                  key={v.id}
-                  title={v.licensePlate}
-                  subtitle={`${VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"]} · ${VEHICLE_TYPE_LABELS[v.vehicleType] || v.vehicleType}`}
-                  fields={[
-                    { label: "דגם", value: v.model || v.make || "—" },
-                    { label: "סטטוס", value: VEHICLE_STATUS_LABELS[v.status] || v.status },
-                    { label: "טסט עד", value: formatDateIL(v.testExpiryDate) || "—" },
-                    { label: "ביטוח עד", value: formatDateIL(v.insuranceValidUntil) || "—" },
-                    { label: "על שם", value: v.registeredTo || "—" },
-                  ]}
-                  notes={v.displayNotes || undefined}
-                  className={alertClass(alert)}
-                  onEdit={() => {
-                    setEditing(v);
-                    setVehicleModal("edit");
-                    setAddKind("vehicle");
-                  }}
-                  footer={
-                    <div className="px-4 pb-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setViewingVehicle(v)}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-primary"
-                      >
-                        <Eye className="h-3 w-3" /> צפייה
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteId(v.id)}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-danger"
-                      >
-                        <Trash2 className="h-3 w-3" /> מחיקה
-                      </button>
-                    </div>
-                  }
-                />
-              );
-            })}
-          </div>
-          {filtered.length === 0 && <p className="p-4 text-center text-muted text-sm">לא נמצאו כלי רכב</p>}
-        </section>
-
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-extrabold text-primary-dark">מכונות</h3>
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="סינון סוג ציוד">
+          {TYPE_FILTERS.map((f) => (
             <button
+              key={f.id}
               type="button"
-              onClick={startMachineAdd}
-              className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+              role="tab"
+              aria-selected={typeFilter === f.id}
+              onClick={() => setTypeFilter(f.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold border transition-colors ${
+                typeFilter === f.id
+                  ? "bg-primary text-white border-primary"
+                  : "bg-card border-border text-foreground hover:border-primary/40"
+              }`}
             >
-              <Plus className="h-3.5 w-3.5" /> הוסף מכונה
+              {f.label}
             </button>
-          </div>
-          <div className="work-card-grid">
-            {filteredMachines.map((m) => (
-              <WorkCardDetail
-                key={m.id}
-                title={m.name}
-                subtitle={MACHINERY_UNIT_LABELS[m.unitType] || m.unitType}
-                fields={[
-                  { label: "מספר יחידה", value: m.unitNumber || "—" },
-                  { label: "סוג", value: MACHINERY_UNIT_LABELS[m.unitType] || m.unitType },
-                ]}
-                onEdit={() => {
-                  setEditingMachine(m);
-                  setMachineForm({
-                    name: m.name,
-                    unitType: m.unitType,
-                    unitNumber: m.unitNumber || "",
-                  });
-                  setMachineModal("edit");
-                  setAddKind("machine");
-                }}
-                footer={
-                  <div className="px-4 pb-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingMachine(m);
-                        setMachineModal("view");
-                      }}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-primary"
-                    >
-                      <Eye className="h-3 w-3" /> צפייה
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`להשבית את המכונה ${m.name}?`)) deleteMachine(m.id);
-                      }}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-danger"
-                    >
-                      <Trash2 className="h-3 w-3" /> מחיקה
-                    </button>
-                  </div>
-                }
-              />
-            ))}
-          </div>
-          {filteredMachines.length === 0 && <p className="p-4 text-center text-muted text-sm">אין מכונות — הוסף מכונה חדשה</p>}
-        </section>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-border bg-card card-shadow">
+          <table className="w-full min-w-[640px] text-sm text-right">
+            <thead>
+              <tr className="border-b border-border bg-muted/30 text-xs text-muted">
+                <th className="px-3 py-2.5 font-bold">סוג</th>
+                <th className="px-3 py-2.5 font-bold">שם</th>
+                <th className="px-3 py-2.5 font-bold">מספר</th>
+                <th className="px-3 py-2.5 font-bold">סטטוס</th>
+                <th className="px-3 py-2.5 font-bold">פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                  <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{row.typeLabel}</td>
+                  <td className="px-3 py-2.5 font-bold text-primary-dark">{row.name}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{row.number}</td>
+                  <td className="px-3 py-2.5">{row.statusLabel}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {row.kind === "vehicle" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setViewingVehicle(row.vehicle)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                          >
+                            <Eye className="h-3 w-3" /> צפייה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditing(row.vehicle);
+                              setVehicleModal("edit");
+                              setAddKind("vehicle");
+                            }}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                          >
+                            <Pencil className="h-3 w-3" /> עריכה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteId(row.vehicle.id)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-danger"
+                          >
+                            <Trash2 className="h-3 w-3" /> מחיקה
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMachine(row.machine);
+                              setMachineModal("view");
+                            }}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                          >
+                            <Eye className="h-3 w-3" /> צפייה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMachine(row.machine);
+                              setMachineForm({
+                                name: row.machine.name,
+                                unitType: row.machine.unitType,
+                                unitNumber: row.machine.unitNumber || "",
+                              });
+                              setMachineModal("edit");
+                              setAddKind("machine");
+                            }}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                          >
+                            <Pencil className="h-3 w-3" /> עריכה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteMachineId(row.machine.id)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-danger"
+                          >
+                            <Trash2 className="h-3 w-3" /> מחיקה
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {rows.length === 0 && (
+            <p className="p-8 text-center text-muted text-sm">לא נמצאו פריטים לפי הסינון</p>
+          )}
+        </div>
+
+        {typeFilter === "all" && rows.some((r) => r.kind === "vehicle") && (
+          <p className="text-[11px] text-muted">
+            התראות טסט/ביטוח מוצגות בלשונית טיפולים.{" "}
+            {vehicles.filter((v) => vehicleRowAlert(v) === "expired" || vehicleRowAlert(v) === "warning").length >
+              0 &&
+              `${vehicles.filter((v) => vehicleRowAlert(v) === "expired" || vehicleRowAlert(v) === "warning").length} כלים דורשים תשומת לב.`}
+          </p>
+        )}
       </main>
 
       {addKind === "choose" && (
@@ -485,14 +572,14 @@ export function FleetPageClient({
               onClick={startVehicleAdd}
               className="w-full rounded-xl bg-primary py-3 text-white font-extrabold"
             >
-              ➕ כלי רכב
+              🚗 הוסף כלי רכב
             </button>
             <button
               type="button"
               onClick={startMachineAdd}
               className="w-full rounded-xl border border-border py-3 font-extrabold"
             >
-              ➕ מכונה
+              🚜 הוסף מכונה
             </button>
           </div>
         </div>
@@ -559,8 +646,19 @@ export function FleetPageClient({
               className="field-input"
             />
             {machineMsg && <p className="text-sm text-red-600 font-semibold">{machineMsg}</p>}
-            <button type="submit" disabled={machineSaving} className="w-full rounded-xl bg-primary py-3 text-white font-extrabold disabled:opacity-50">
-              {machineSaving ? "שומר..." : "שמור מכונה"}
+            <button
+              type="submit"
+              disabled={machineSaving}
+              className="w-full rounded-xl bg-primary py-3 text-white font-extrabold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {machineSaving ? (
+                <>
+                  <InlineLoader />
+                  שומר...
+                </>
+              ) : (
+                "שמור מכונה"
+              )}
             </button>
           </form>
         </div>
@@ -602,6 +700,10 @@ export function FleetPageClient({
               <span className="text-muted">דגם: </span>
               {viewingVehicle.model || "—"}
             </p>
+            <p>
+              <span className="text-muted">טסט עד: </span>
+              {formatDateIL(viewingVehicle.testExpiryDate) || "—"}
+            </p>
             <button type="button" onClick={() => setViewingVehicle(null)} className="w-full mt-3 rounded-xl border py-2 font-bold">
               סגור
             </button>
@@ -617,12 +719,35 @@ export function FleetPageClient({
             <p className="text-sm text-muted mb-4">הכלי יסומן כלא פעיל. ניתן לשחזר בעריכה.</p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => deleteVehicle(deleteId)}
                 className="flex-1 bg-danger text-white rounded-xl py-2 font-semibold"
               >
                 מחק
               </button>
-              <button onClick={() => setDeleteId(null)} className="flex-1 border rounded-xl py-2">
+              <button type="button" onClick={() => setDeleteId(null)} className="flex-1 border rounded-xl py-2">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteMachineId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteMachineId(null)} />
+          <div className="relative bg-card rounded-2xl border p-6 max-w-sm w-full card-shadow">
+            <h3 className="font-bold text-lg mb-2">מחיקת מכונה?</h3>
+            <p className="text-sm text-muted mb-4">המכונה תושבת ולא תופיע ברשימות פעילות.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => deleteMachine(deleteMachineId)}
+                className="flex-1 bg-danger text-white rounded-xl py-2 font-semibold"
+              >
+                מחק
+              </button>
+              <button type="button" onClick={() => setDeleteMachineId(null)} className="flex-1 border rounded-xl py-2">
                 ביטול
               </button>
             </div>

@@ -9,11 +9,11 @@ import {
   FileText,
   Fuel,
   History,
-  Loader2,
   LogIn,
   LogOut,
   UserRound,
 } from "lucide-react";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 import { useCallback, useEffect, useState } from "react";
 import { getCurrentPosition } from "@/lib/geolocation";
 
@@ -225,9 +225,7 @@ export default function EmployeeHomePage() {
           )}
 
           {shiftLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-white/70" />
-            </div>
+            <SmallLoader className="py-4" />
           ) : !onShift ? (
             <button
               type="button"
@@ -235,7 +233,7 @@ export default function EmployeeHomePage() {
               onClick={checkIn}
               className="w-full rounded-2xl bg-emerald-500 text-white py-5 font-extrabold text-xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] transition-transform shadow-lg"
             >
-              {shiftBusy ? <Loader2 className="h-7 w-7 animate-spin" /> : <LogIn className="h-7 w-7" />}
+              {shiftBusy ? <InlineLoader className="h-7 w-7" /> : <LogIn className="h-7 w-7" />}
               🟢 כניסה למשמרת
             </button>
           ) : (
@@ -245,7 +243,7 @@ export default function EmployeeHomePage() {
               onClick={checkOut}
               className="w-full rounded-2xl bg-red-600 text-white py-5 font-extrabold text-xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] transition-transform shadow-lg"
             >
-              {shiftBusy ? <Loader2 className="h-7 w-7 animate-spin" /> : <LogOut className="h-7 w-7" />}
+              {shiftBusy ? <InlineLoader className="h-7 w-7" /> : <LogOut className="h-7 w-7" />}
               🔴 יציאה מהמשמרת
             </button>
           )}

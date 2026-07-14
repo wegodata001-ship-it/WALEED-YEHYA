@@ -13,7 +13,8 @@ import {
 } from "@/lib/constants";
 import { formatMachineryWhatsApp } from "@/lib/whatsapp";
 import { addToOfflineQueue } from "@/lib/offline-sync";
-import { CheckCircle2, Loader2, Plus, X } from "lucide-react";
+import { CheckCircle2, Plus, X } from "lucide-react";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 
 type MachineryUnit = {
   id: string;
@@ -162,7 +163,7 @@ export default function MobileMachineryPage() {
   if (!lookup) {
     return (
       <EmployeeShell title="יומן מכונה" subtitle="טוען...">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <SmallLoader />
       </EmployeeShell>
     );
   }
@@ -364,9 +365,16 @@ export default function MobileMachineryPage() {
               type="button"
               disabled={addingUnit || !unitForm.name.trim()}
               onClick={addUnit}
-              className="w-full rounded-xl bg-primary py-2.5 text-white font-bold disabled:opacity-50"
+              className="w-full rounded-xl bg-primary py-2.5 text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {addingUnit ? "שומר..." : "שמור מכונה ובחר"}
+              {addingUnit ? (
+                <>
+                  <InlineLoader />
+                  שומר...
+                </>
+              ) : (
+                "שמור מכונה ובחר"
+              )}
             </button>
           </div>
         )}
@@ -423,9 +431,16 @@ export default function MobileMachineryPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-primary py-4 text-white font-bold text-lg hover:bg-primary-dark disabled:opacity-50"
+          className="w-full rounded-xl bg-primary py-4 text-white font-bold text-lg hover:bg-primary-dark disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {loading ? "שומר..." : "שמור ביומן העבודה"}
+          {loading ? (
+            <>
+              <InlineLoader />
+              שומר...
+            </>
+          ) : (
+            "שמור ביומן העבודה"
+          )}
         </button>
       </form>
     </EmployeeShell>

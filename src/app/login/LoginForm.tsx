@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Tractor, Loader2, Phone, Lock } from "lucide-react";
+import { Tractor, Phone, Lock } from "lucide-react";
+import { InlineLoader } from "@/components/ui/SmallLoader";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -64,8 +65,15 @@ export default function LoginForm() {
             </div>
           </div>
           {error && <p className="text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-          <button type="submit" disabled={loading} className="w-full rounded-xl bg-primary py-3.5 text-white font-bold hover:bg-primary-dark disabled:opacity-50">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "התחבר"}
+          <button type="submit" disabled={loading} className="w-full rounded-xl bg-primary py-3.5 text-white font-bold hover:bg-primary-dark disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? (
+              <>
+                <InlineLoader />
+                מתחבר...
+              </>
+            ) : (
+              "התחבר"
+            )}
           </button>
         </form>
 

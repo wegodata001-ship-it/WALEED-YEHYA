@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { handleApiAuth, requireManager } from "@/lib/api-auth";
+import { cacheGet, cacheSet } from "@/lib/ttl-cache";
 
 function parseRange(searchParams: URLSearchParams) {
   const year = Number(searchParams.get("year"));
@@ -28,8 +29,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const org = await getDefaultOrg();
   const { start, end } = parseRange(searchParams);
+  const cacheKey = `dashboard:${org.id}:${start.toISOString()}:${end.toISOString()}`;
+  const cached = cacheGet<unknown>(cacheKey);
+  if (cached) return NextResponse.json(cached);
 
-  const [workLogs, fuelTx, attendance, pendingMachinery, pendingFuel, lowFuel, maintenanceAlerts, employeesCount, customersCount, vehiclesCount, pendingTasks, pendingAtt, ledgerCount] = await Promise.all([
+  const [workLogs, fuelTx, attendance, pendingMachinery, pendingFuel, lowFuel, maintenanceAlerts, employeesCount, customersCount, vehiclesCount, pendingTasks, pendingAtt, ledgerCount, customerLedgerCount] = await Promise.all([
     prisma.machineryWorkLog.findMany({
       where: { organizationId: org.id, workDate: { gte: start, lt: end } },
       select: {
@@ -101,17 +105,12 @@ export async function GET(req: NextRequest) {
     prisma.employeeLedgerEntry.count({
       where: { entryDate: { gte: start, lt: end }, employee: { organizationId: org.id } },
     }).catch(() => 0),
+    prisma.customerLedgerEntry
+      .count({
+        where: { organizationId: org.id, entryDate: { gte: start, lt: end } },
+      })
+      .catch(() => 0),
   ]);
-
-  // customer ledger count in range
-  let customerLedgerCount = 0;
-  try {
-    customerLedgerCount = await prisma.customerLedgerEntry.count({
-      where: { organizationId: org.id, entryDate: { gte: start, lt: end } },
-    });
-  } catch {
-    customerLedgerCount = 0;
-  }
 
   const pendingSync = pendingMachinery + pendingFuel;
   const totalAcres = workLogs.reduce((s, l) => s + Number(l.acresWorked), 0);
@@ -154,7 +153,7 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
     .slice(0, 20);
 
-  return NextResponse.json({
+  const payload = {
     range: { start, end },
     stats: {
       totalAcres: Math.round(totalAcres * 10) / 10,
@@ -171,7 +170,9 @@ export async function GET(req: NextRequest) {
       customersCount,
       vehiclesCount,
       pendingApprovals: pendingTasks + pendingAtt,
-      ledgerMovements: (typeof ledgerCount === "number" ? ledgerCount : 0) + customerLedgerCount,
+      ledgerMovements:
+        (typeof ledgerCount === "number" ? ledgerCount : 0) +
+        (typeof customerLedgerCount === "number" ? customerLedgerCount : 0),
       tanksCount: lowFuel.length,
     },
     activity,
@@ -180,7 +181,9 @@ export async function GET(req: NextRequest) {
       current: Number(s.currentLevel),
       capacity: s.capacityLiters ? Number(s.capacityLiters) : null,
     })),
-  });
+  };
+  cacheSet(cacheKey, payload, 8_000);
+  return NextResponse.json(payload);
   } catch (e) {
     return handleApiAuth(e);
   }

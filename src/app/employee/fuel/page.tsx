@@ -7,7 +7,8 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { FUEL_SOURCE_LABELS } from "@/lib/constants";
 import { formatFuelWhatsApp } from "@/lib/whatsapp";
 import { addToOfflineQueue } from "@/lib/offline-sync";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+import { InlineLoader, SmallLoader } from "@/components/ui/SmallLoader";
 import type { VehicleOwnership } from "@/lib/vehicle-ownership";
 
 type FuelRecipient = {
@@ -129,7 +130,7 @@ export default function MobileFuelPage() {
   if (!lookup) {
     return (
       <EmployeeShell title="תדלוק" subtitle="טוען...">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <SmallLoader />
       </EmployeeShell>
     );
   }
@@ -294,9 +295,18 @@ export default function MobileFuelPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-primary py-4 text-white font-bold text-lg disabled:opacity-50"
+          className="w-full rounded-xl bg-primary py-4 text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {loading ? "שומר..." : mode === "tank_fill" ? "שמור מילוי מיכל" : "שמור תדלוק"}
+          {loading ? (
+            <>
+              <InlineLoader />
+              שומר...
+            </>
+          ) : mode === "tank_fill" ? (
+            "שמור מילוי מיכל"
+          ) : (
+            "שמור תדלוק"
+          )}
         </button>
       </form>
     </EmployeeShell>

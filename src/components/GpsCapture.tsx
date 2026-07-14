@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { MapPin, CheckCircle2 } from "lucide-react";
+import { InlineLoader } from "@/components/ui/SmallLoader";
 
 type GpsCaptureProps = {
   onCapture: (coords: { lat: number; lng: number }) => void;
@@ -56,7 +57,7 @@ export function GpsCapture({ onCapture, coords }: GpsCaptureProps) {
         </p>
       ) : loading ? (
         <p className="mt-2 flex items-center gap-1 text-xs text-muted">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <InlineLoader />
           מאתר מיקום...
         </p>
       ) : error ? (

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { EmployeeShell } from "@/components/EmployeeShell";
-import { Loader2, UserRound, Phone, Briefcase } from "lucide-react";
+import { UserRound, Phone, Briefcase } from "lucide-react";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 
 type Me = {
   firstName: string;
@@ -35,7 +36,7 @@ export default function EmployeeProfilePage() {
   if (loading) {
     return (
       <EmployeeShell title="הפרופיל שלי" subtitle="טוען...">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <SmallLoader />
       </EmployeeShell>
     );
   }

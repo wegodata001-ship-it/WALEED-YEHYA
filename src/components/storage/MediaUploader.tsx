@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Film, Loader2, X } from "lucide-react";
+import { Camera, Film, X } from "lucide-react";
+import { InlineLoader } from "@/components/ui/SmallLoader";
 import type { StoredMediaRef } from "@/lib/storage/types";
 import { resolveMediaDisplayUrl } from "@/lib/storage/paths";
 import {
@@ -271,7 +272,7 @@ export function MediaUploader({
           <div className="mb-2 text-xs text-muted flex items-center gap-2">
             {pendingVideo.status === "uploading" ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <InlineLoader />
                 מעלה סרטון {pendingVideo.progress}%
               </>
             ) : pendingVideo.status === "error" ? (

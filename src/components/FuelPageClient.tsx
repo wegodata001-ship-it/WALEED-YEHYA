@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Table2, List, Loader2 } from "lucide-react";
+import { Table2, List } from "lucide-react";
 import { AppShell } from "@/components/AppNav";
+import { SmallLoader } from "@/components/ui/SmallLoader";
 import { FuelGridClient } from "@/components/FuelGridClient";
 import { FUEL_SOURCE_LABELS, FUEL_RECIPIENT_LABELS } from "@/lib/constants";
 
@@ -128,7 +129,7 @@ export function FuelPageClient() {
       {tab === "grid" ? (
         <FuelGridClient initialYear={2024} initialMonth={6} />
       ) : loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <SmallLoader />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border bg-card card-shadow">
           <table className="w-full text-sm">
