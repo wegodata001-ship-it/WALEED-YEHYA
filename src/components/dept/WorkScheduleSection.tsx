@@ -93,6 +93,7 @@ export function WorkScheduleSection() {
   const [filterVehiclePlate, setFilterVehiclePlate] = useState("");
   const [filterMachineryUnitId, setFilterMachineryUnitId] = useState("");
   const [msg, setMsg] = useState("");
+  const [historyTask, setHistoryTask] = useState<FieldTaskRow | null>(null);
 
   const loadMaster = useCallback(async (signal?: AbortSignal) => {
     const res = await fetch("/api/master-data", { signal });
@@ -390,6 +391,55 @@ export function WorkScheduleSection() {
       ) : (
         <div className="work-card-grid">
           {filtered.map((t) => (
+            (() => {
+              const unit = t.quantityUnitLabel || t.quantityUnit;
+              const planned = Number(t.plannedQuantity || 0);
+              const reported = t.reportedQuantity != null ? Number(t.reportedQuantity) : 0;
+              const remaining =
+                t.remainingQuantity != null
+                  ? Number(t.remainingQuantity)
+                  : planned
+                    ? planned - reported
+                    : null;
+              const pctRaw =
+                t.quantityComparison?.completionPct != null
+                  ? Number(t.quantityComparison.completionPct)
+                  : planned
+                    ? Math.round((reported / planned) * 100)
+                    : null;
+              const pct = pctRaw != null ? Math.max(0, Math.min(100, pctRaw)) : null;
+              const reports = t.progressReports || [];
+              const lastReportAt =
+                reports.length > 0
+                  ? reports
+                      .map((r) => r.at)
+                      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+                  : null;
+              const daysWorked = (() => {
+                if (!reports.length) return reported > 0 ? 1 : 0;
+                const set = new Set<string>();
+                for (const r of reports) set.add(new Date(r.at).toISOString().slice(0, 10));
+                return set.size;
+              })();
+
+              const ProgressBar = () =>
+                pct == null ? null : (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-muted">
+                      <span>התקדמות</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted/40 overflow-hidden mt-1">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${pct}%` }}
+                        aria-label={`התקדמות ${pct}%`}
+                      />
+                    </div>
+                  </div>
+                );
+
+              return (
             <WorkCardDetail
               key={t.id}
               date={`${formatTaskDate(t.workDate)} · ${formatTaskTime(t.workDate)}`}
@@ -406,6 +456,7 @@ export function WorkScheduleSection() {
                 .filter(Boolean)
                 .join(" · ")}
               fields={[
+                { label: "עובד", value: `${t.assignee.firstName} ${t.assignee.lastName}` },
                 ...buildFieldTaskDetailFields(t),
                 ...(t.startedAt
                   ? [{ label: "התחיל", value: new Date(t.startedAt).toLocaleString("he-IL") }]
@@ -416,18 +467,129 @@ export function WorkScheduleSection() {
               ]}
               notes={t.employeeNotes || t.managerNotes}
               footer={
-                t.status === "COMPLETED" || (t.media && t.media.length > 0) ? (
-                  <div className="px-4 py-3 border-t border-border bg-[var(--surface)]">
-                    <TaskMediaViewer
-                      media={t.media}
-                      legacyUrls={t.photoUrls}
-                      showEmpty={t.status === "COMPLETED"}
-                    />
+                <div className="border-t border-border bg-[var(--surface)]">
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <div className="text-muted font-bold">מתוכנן</div>
+                        <div className="font-extrabold text-primary-dark">
+                          {planned.toLocaleString("he-IL")} {unit}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <div className="text-muted font-bold">בוצע</div>
+                        <div className="font-extrabold text-primary-dark">
+                          {reported.toLocaleString("he-IL")} {unit}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <div className="text-muted font-bold">נותר</div>
+                        <div className="font-extrabold text-primary-dark">
+                          {remaining == null ? "—" : `${Number(remaining).toLocaleString("he-IL")} ${unit}`}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <div className="text-muted font-bold">ימי עבודה</div>
+                        <div className="font-extrabold text-primary-dark">{daysWorked || "—"}</div>
+                      </div>
+                    </div>
+
+                    <ProgressBar />
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="text-[11px] text-muted font-semibold">
+                        דיווח אחרון:{" "}
+                        {lastReportAt
+                          ? new Date(lastReportAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                          : "—"}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryTask(t)}
+                        className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-extrabold hover:border-primary/40"
+                        disabled={reports.length === 0}
+                        title={reports.length === 0 ? "אין היסטוריה עדיין" : "היסטוריית ביצוע"}
+                      >
+                        היסטוריית ביצוע
+                      </button>
+                    </div>
                   </div>
-                ) : null
+
+                  {(t.status === "COMPLETED" || (t.media && t.media.length > 0)) && (
+                    <div className="px-4 py-3 border-t border-border">
+                      <TaskMediaViewer
+                        media={t.media}
+                        legacyUrls={t.photoUrls}
+                        showEmpty={t.status === "COMPLETED"}
+                      />
+                    </div>
+                  )}
+                </div>
               }
             />
+              );
+            })()
           ))}
+        </div>
+      )}
+
+      {historyTask && (
+        <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-3xl rounded-2xl bg-card border border-border p-5 card-shadow space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-lg font-extrabold text-primary-dark truncate">היסטוריית ביצוע</h3>
+                <p className="text-xs text-muted truncate">
+                  {historyTask.customerName || "לקוח"} · {historyTask.assignee.firstName} {historyTask.assignee.lastName}
+                </p>
+              </div>
+              <button type="button" onClick={() => setHistoryTask(null)} className="p-1 rounded hover:bg-muted/20">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {(!historyTask.progressReports || historyTask.progressReports.length === 0) ? (
+              <p className="text-sm text-muted text-center py-10">אין דיווחים עדיין</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-border bg-background">
+                <table className="w-full min-w-[720px] text-sm text-right">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 text-xs text-muted">
+                      <th className="px-3 py-2.5 font-bold">תאריך</th>
+                      <th className="px-3 py-2.5 font-bold">עובד</th>
+                      <th className="px-3 py-2.5 font-bold">בוצע</th>
+                      <th className="px-3 py-2.5 font-bold">סה״כ אחרי</th>
+                      <th className="px-3 py-2.5 font-bold">הערות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyTask.progressReports
+                      .slice()
+                      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+                      .map((r, idx) => (
+                        <tr key={`${r.at}-${idx}`} className="border-b border-border/70 last:border-0">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            {new Date(r.at).toLocaleDateString("he-IL")}
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            {historyTask.assignee.firstName} {historyTask.assignee.lastName}
+                          </td>
+                          <td className="px-3 py-2.5 font-bold text-primary-dark whitespace-nowrap">
+                            {Number(r.quantity).toLocaleString("he-IL")} {historyTask.quantityUnitLabel || historyTask.quantityUnit}
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            {Number(r.totalAfter).toLocaleString("he-IL")}
+                          </td>
+                          <td className="px-3 py-2.5 text-muted">
+                            {r.notes || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

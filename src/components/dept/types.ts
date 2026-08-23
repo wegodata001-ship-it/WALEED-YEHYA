@@ -21,6 +21,7 @@ export type FieldTaskRow = {
     quantity: number;
     totalAfter: number;
     notes?: string | null;
+    media?: { path: string; kind: "image" | "video"; mimeType: string }[];
   }[];
   quantityComparison?: {
     planned: number;

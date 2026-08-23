@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Tractor,
+  CalendarDays,
   Fuel,
   MapPin,
   MessageCircle,
@@ -53,6 +54,12 @@ type Stats = {
   workLogsCount: number;
   fuelLogsCount: number;
   attendanceCount: number;
+  tasksWaiting: number;
+  tasksInProgress: number;
+  tasksCompleted: number;
+  tasksPlannedTotal: number;
+  tasksReportedTotal: number;
+  tasksRemainingTotal: number;
   pendingSync: number;
   alerts: number;
   expiryAlerts: number;
@@ -111,6 +118,12 @@ export function DashboardClient() {
         workLogsCount: 0,
         fuelLogsCount: 0,
         attendanceCount: 0,
+        tasksWaiting: 0,
+        tasksInProgress: 0,
+        tasksCompleted: 0,
+        tasksPlannedTotal: 0,
+        tasksReportedTotal: 0,
+        tasksRemainingTotal: 0,
         pendingSync: 0,
         alerts: 0,
         expiryAlerts: 0,
@@ -302,6 +315,38 @@ export function DashboardClient() {
               </div>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h3 className="text-sm font-bold text-muted mb-3">התקדמות משימות</h3>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="work-card work-card--detail">
+            <header className="work-card-head">
+              <div className="flex items-center gap-2 min-w-0">
+                <CalendarDays className="h-5 w-5 text-primary shrink-0" />
+                <h3 className="work-card-title">סטטוסים</h3>
+              </div>
+            </header>
+            <div className="px-4 py-3 text-sm">
+              <p className="font-bold text-primary-dark">🟡 ממתינות: {stats.tasksWaiting}</p>
+              <p className="font-bold text-primary-dark">🟠 בטיפול: {stats.tasksInProgress}</p>
+              <p className="font-bold text-primary-dark">🟢 הושלמו: {stats.tasksCompleted}</p>
+            </div>
+          </div>
+          <div className="work-card work-card--detail">
+            <header className="work-card-head">
+              <div className="flex items-center gap-2 min-w-0">
+                <Tractor className="h-5 w-5 text-primary shrink-0" />
+                <h3 className="work-card-title">כמויות</h3>
+              </div>
+            </header>
+            <div className="px-4 py-3 text-sm space-y-1">
+              <p className="text-muted">מתוכנן: <span className="font-bold text-primary-dark">{stats.tasksPlannedTotal.toLocaleString("he-IL")}</span></p>
+              <p className="text-muted">בוצע: <span className="font-bold text-primary-dark">{stats.tasksReportedTotal.toLocaleString("he-IL")}</span></p>
+              <p className="text-muted">נותר: <span className="font-bold text-primary-dark">{stats.tasksRemainingTotal.toLocaleString("he-IL")}</span></p>
+            </div>
+          </div>
         </div>
       </section>
 

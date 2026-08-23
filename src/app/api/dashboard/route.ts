@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const cached = cacheGet<unknown>(cacheKey);
   if (cached) return NextResponse.json(cached);
 
-  const [workLogs, fuelTx, attendance, pendingMachinery, pendingFuel, lowFuel, maintenanceAlerts, employeesCount, customersCount, vehiclesCount, pendingTasks, pendingAtt, ledgerCount, customerLedgerCount] = await Promise.all([
+  const [workLogs, fuelTx, attendance, pendingMachinery, pendingFuel, lowFuel, maintenanceAlerts, employeesCount, customersCount, vehiclesCount, pendingTasks, pendingAtt, ledgerCount, customerLedgerCount, tasksAgg, tasksByStatus] = await Promise.all([
     prisma.machineryWorkLog.findMany({
       where: { organizationId: org.id, workDate: { gte: start, lt: end } },
       select: {
@@ -110,6 +110,15 @@ export async function GET(req: NextRequest) {
         where: { organizationId: org.id, entryDate: { gte: start, lt: end } },
       })
       .catch(() => 0),
+    prisma.fieldTask.aggregate({
+      where: { organizationId: org.id, workDate: { gte: start, lt: end } },
+      _sum: { plannedQuantity: true, reportedQuantity: true },
+    }),
+    prisma.fieldTask.groupBy({
+      by: ["status"],
+      where: { organizationId: org.id, workDate: { gte: start, lt: end } },
+      _count: { _all: true },
+    }),
   ]);
 
   const pendingSync = pendingMachinery + pendingFuel;
@@ -117,6 +126,19 @@ export async function GET(req: NextRequest) {
   const totalFuel = fuelTx.reduce((s, t) => s + Number(t.liters), 0);
   const totalFuelCost = fuelTx.reduce((s, t) => s + Number(t.totalCost || 0), 0);
   const operators = new Set(workLogs.map((l) => l.operatorId).filter(Boolean)).size;
+
+  const plannedTasksQty = Number((tasksAgg as { _sum?: { plannedQuantity?: unknown } })._sum?.plannedQuantity || 0);
+  const reportedTasksQty = Number((tasksAgg as { _sum?: { reportedQuantity?: unknown } })._sum?.reportedQuantity || 0);
+  const remainingTasksQty = plannedTasksQty - reportedTasksQty;
+
+  const statusCounts = new Map<string, number>();
+  for (const row of (tasksByStatus as { status: string; _count: { _all: number } }[]) || []) {
+    statusCounts.set(row.status, Number(row._count?._all || 0));
+  }
+  const tasksWaiting = (statusCounts.get("ASSIGNED") || 0) + (statusCounts.get("PENDING") || 0);
+  const tasksInProgress =
+    (statusCounts.get("IN_PROGRESS") || 0) + (statusCounts.get("AWAITING_COMPLETION") || 0);
+  const tasksCompleted = statusCounts.get("COMPLETED") || 0;
 
   const fuelAlerts = lowFuel.filter(
     (s) => s.capacityLiters && Number(s.currentLevel) / Number(s.capacityLiters) < 0.25
@@ -163,6 +185,12 @@ export async function GET(req: NextRequest) {
       workLogsCount: workLogs.length,
       fuelLogsCount: fuelTx.length,
       attendanceCount: attendance,
+      tasksWaiting,
+      tasksInProgress,
+      tasksCompleted,
+      tasksPlannedTotal: Math.round(plannedTasksQty * 10) / 10,
+      tasksReportedTotal: Math.round(reportedTasksQty * 10) / 10,
+      tasksRemainingTotal: Math.round(remainingTasksQty * 10) / 10,
       pendingSync,
       alerts: fuelAlerts + expiryAlerts,
       expiryAlerts,
