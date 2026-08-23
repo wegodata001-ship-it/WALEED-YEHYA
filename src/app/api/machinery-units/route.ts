@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { MachineryUnitType } from "@prisma/client";
 import { handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
+import { cacheDeletePrefix } from "@/lib/ttl-cache";
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,6 +62,10 @@ export async function POST(req: NextRequest) {
         unitNumber: true,
       },
     });
+
+    // Ensure employees see updates immediately (lookup cache + dashboard cache).
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
 
     return NextResponse.json(unit, { status: 201 });
   } catch (e) {

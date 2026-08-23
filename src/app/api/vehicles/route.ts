@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 import { encodeOwnershipInNotes, withOwnershipField } from "@/lib/vehicle-ownership";
+import { cacheDeletePrefix } from "@/lib/ttl-cache";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -81,6 +82,10 @@ export async function POST(req: NextRequest) {
         newValues: vehicle,
       },
     });
+
+    // Ensure employees see updates immediately (lookup cache + dashboard cache).
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
 
     return NextResponse.json(withOwnershipField(vehicle), { status: 201 });
   } catch (e) {

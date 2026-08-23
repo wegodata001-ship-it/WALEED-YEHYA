@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmployeeShell } from "@/components/EmployeeShell";
 import { PhotoCapture } from "@/components/PhotoCapture";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -56,14 +56,37 @@ export default function MobileFuelPage() {
     tankSourceId: "",
   });
 
-  useEffect(() => {
-    Promise.all([fetch("/api/lookup").then((r) => r.json()), fetch("/api/auth/me").then((r) => r.json())]).then(
-      ([lookupData, me]) => {
-        setLookup(lookupData);
-        if (me?.firstName) setOperatorName(`${me.firstName} ${me.lastName || ""}`.trim());
-      }
-    );
+  const loadLookup = useCallback(async (signal?: AbortSignal) => {
+    const opts = signal ? { signal } : {};
+    const [lookupData, me] = await Promise.all([
+      fetch("/api/lookup", opts).then((r) => r.json()),
+      fetch("/api/auth/me", opts).then((r) => r.json()),
+    ]);
+    setLookup(lookupData);
+    if (me?.firstName) setOperatorName(`${me.firstName} ${me.lastName || ""}`.trim());
   }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    loadLookup(ac.signal).catch(() => {});
+    return () => ac.abort();
+  }, [loadLookup]);
+
+  // Refresh lookup automatically when user returns to the app (no manual refresh required).
+  useEffect(() => {
+    const ac = new AbortController();
+    const refresh = () => loadLookup(ac.signal).catch(() => {});
+    const onVis = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      ac.abort();
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadLookup]);
 
   const tanks = (lookup?.fuelSources || []).filter((s) => s.sourceType === "FIXED_TANK" || s.sourceType === "FIELD_CART");
   const recipients = lookup?.fuelRecipients || [];

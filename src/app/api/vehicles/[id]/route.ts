@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
+import { cacheDeletePrefix } from "@/lib/ttl-cache";
 import {
   encodeOwnershipInNotes,
   parseOwnershipFromNotes,
@@ -86,6 +87,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
+    // Ensure employees see updates immediately (lookup cache + dashboard cache).
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
+
     return NextResponse.json(withOwnershipField(vehicle));
   } catch (e) {
     if (e instanceof ApiAuthError) return handleApiAuth(e);
@@ -118,6 +123,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         oldValues: old,
       },
     });
+
+    // Ensure employees see updates immediately (lookup cache + dashboard cache).
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
 
     return NextResponse.json({ success: true });
   } catch (e) {

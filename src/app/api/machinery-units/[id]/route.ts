@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { MachineryUnitType } from "@prisma/client";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
+import { cacheDeletePrefix } from "@/lib/ttl-cache";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -39,6 +40,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
+
     return NextResponse.json(unit);
   } catch (e) {
     if (e instanceof ApiAuthError) return handleApiAuth(e);
@@ -72,6 +76,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         isActive: true,
       },
     });
+
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
 
     return NextResponse.json(unit);
   } catch (e) {
