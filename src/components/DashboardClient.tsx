@@ -64,6 +64,13 @@ type Stats = {
   tanksCount: number;
 };
 
+type ActiveShift = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  checkIn: string | null;
+};
+
 type DeptCard = {
   href: string;
   title: string;
@@ -81,6 +88,8 @@ export function DashboardClient() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [fuelLevels, setFuelLevels] = useState<{ name: string; current: number; capacity: number | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeLoading, setActiveLoading] = useState(true);
+  const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -118,15 +127,50 @@ export function DashboardClient() {
     }
   }, [year, month, mode]);
 
+  const loadActive = useCallback(async (signal?: AbortSignal) => {
+    setActiveLoading(true);
+    try {
+      const res = await fetch("/api/attendance/active", { signal });
+      const data = await res.json();
+      if (res.ok) setActiveShifts(data.records || []);
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
+    } finally {
+      setActiveLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const ac = new AbortController();
     load(ac.signal);
     return () => ac.abort();
   }, [load]);
 
+  useEffect(() => {
+    const ac = new AbortController();
+    loadActive(ac.signal);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") loadActive(ac.signal);
+    };
+    const onFocus = () => loadActive(ac.signal);
+    const interval = setInterval(() => loadActive(ac.signal), 5_000);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(interval);
+      ac.abort();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadActive]);
+
   if (loading || !stats) {
     return <SmallLoader />;
   }
+
+  const activeCount = activeShifts.length;
+  const activeSummary = activeCount ? `עובדים במשמרת (${activeCount})` : "עובדים במשמרת";
 
   const departments: DeptCard[] = [
     {
@@ -258,6 +302,48 @@ export function DashboardClient() {
               </div>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-bold text-primary-dark flex items-center gap-2">
+            <Users className="h-5 w-5" /> {activeSummary}
+          </h3>
+          <Link href="/employees" className="text-sm text-primary font-semibold">
+            עובדים →
+          </Link>
+        </div>
+        <div className="rounded-xl border border-border bg-card card-shadow p-4">
+          {activeLoading ? (
+            <SmallLoader />
+          ) : activeCount === 0 ? (
+            <p className="text-sm text-muted text-center py-6">אין עובדים במשמרת כרגע</p>
+          ) : (
+            <div className="space-y-3">
+              {activeShifts.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/employees?q=${encodeURIComponent(r.employeeName)}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background px-3 py-2 hover:border-primary/40 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-primary-dark truncate">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 ml-2 align-middle" />
+                      {r.employeeName}
+                    </p>
+                    <p className="text-xs text-muted">
+                      נכנס:{" "}
+                      {r.checkIn
+                        ? new Date(r.checkIn).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+                        : "—"}
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-primary">צפה</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

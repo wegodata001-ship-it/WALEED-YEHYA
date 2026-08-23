@@ -20,6 +20,7 @@ const emptyForm = () => ({
 
 export function EmployeesRegisterSection({
   employees,
+  activeShifts,
   form,
   setForm,
   modal,
@@ -34,6 +35,7 @@ export function EmployeesRegisterSection({
   msg,
 }: {
   employees: Employee[];
+  activeShifts?: Record<string, string>;
   form: Record<string, string>;
   setForm: (v: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   modal: "add" | "edit" | "view" | null;
@@ -75,6 +77,18 @@ export function EmployeesRegisterSection({
                     ? `חודשי ₪${Number(e.monthlySalary || 0).toLocaleString("he-IL")}`
                     : `שעתי ₪${Number(e.hourlyRate || 0)}`,
               },
+              ...(activeShifts?.[e.id]
+                ? [
+                    { label: "סטטוס משמרת", value: "🟢 במשמרת" },
+                    {
+                      label: "כניסה",
+                      value: new Date(activeShifts[e.id]).toLocaleTimeString("he-IL", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }),
+                    },
+                  ]
+                : [{ label: "סטטוס משמרת", value: "⚪ לא במשמרת" }]),
               { label: "סטטוס", value: e.isActive === false ? "מושבת" : "פעיל" },
             ]}
             onEdit={() => onOpenEdit(e)}

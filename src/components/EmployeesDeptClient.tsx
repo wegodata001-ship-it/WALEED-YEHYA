@@ -32,6 +32,7 @@ export function EmployeesDeptClient() {
   const [q, setQ] = useState("");
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeShifts, setActiveShifts] = useState<Record<string, string>>({});
   const [days, setDays] = useState<DayRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [pendingAttendance, setPendingAttendance] = useState<
@@ -61,15 +62,17 @@ export function EmployeesDeptClient() {
     try {
       const dq = dateRangeQuery(range).toString();
       const opts = signal ? { signal } : {};
-      const [empRes, empListRes, attRes] = await Promise.all([
+      const [empRes, empListRes, attRes, activeRes] = await Promise.all([
         fetch(`/api/reports/employees?${dq}`, opts),
         fetch("/api/employees", opts),
         fetch(`/api/attendance?${dq}`, opts),
+        fetch("/api/attendance/active", opts),
       ]);
-      const [empReport, empList, attData] = await Promise.all([
+      const [empReport, empList, attData, activeData] = await Promise.all([
         empRes.json(),
         empListRes.json(),
         attRes.json(),
+        activeRes.json(),
       ]);
       setDays(empReport.days || []);
       setPendingAttendance(
@@ -108,6 +111,12 @@ export function EmployeesDeptClient() {
       } else {
         setEmployees((empReport.employees || []).map(normalizeEmployee));
       }
+
+      const map: Record<string, string> = {};
+      for (const r of activeData?.records || []) {
+        if (r?.employeeId && r?.checkIn) map[String(r.employeeId)] = String(r.checkIn);
+      }
+      setActiveShifts(map);
     } catch (e) {
       if ((e as Error)?.name === "AbortError") return;
     } finally {
@@ -120,6 +129,37 @@ export function EmployeesDeptClient() {
     load(ac.signal);
     return () => ac.abort();
   }, [load]);
+
+  // Keep shift status near-real-time without manual refresh.
+  useEffect(() => {
+    const ac = new AbortController();
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/attendance/active", { signal: ac.signal });
+        const data = await res.json();
+        if (!res.ok) return;
+        const map: Record<string, string> = {};
+        for (const r of data?.records || []) {
+          if (r?.employeeId && r?.checkIn) map[String(r.employeeId)] = String(r.checkIn);
+        }
+        setActiveShifts(map);
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") return;
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const interval = setInterval(refresh, 8_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(interval);
+      ac.abort();
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   const filteredDays = useMemo(() => {
     const term = q.trim();
@@ -257,6 +297,7 @@ export function EmployeesDeptClient() {
       ) : tab === "register" ? (
         <EmployeesRegisterSection
           employees={filteredEmployees}
+          activeShifts={activeShifts}
           form={empForm}
           setForm={(v) =>
             setEmpForm(
