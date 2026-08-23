@@ -87,6 +87,7 @@ export function WorkScheduleSection() {
   });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [vehicleOwnershipFilter, setVehicleOwnershipFilter] = useState<"all" | "COMPANY" | "CONTRACTOR">("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterEmployeeId, setFilterEmployeeId] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
@@ -160,17 +161,20 @@ export function WorkScheduleSection() {
     () => master.materials.map((m, i) => ({ id: m.id || `mat-${i}-${m.name}`, label: m.name })),
     [master.materials]
   );
-  const vehicleOpts: SelectOption[] = useMemo(
-    () => [
+  const vehicleOpts: SelectOption[] = useMemo(() => {
+    const list =
+      vehicleOwnershipFilter === "all"
+        ? lookup.vehicles
+        : lookup.vehicles.filter((v) => (v.ownership || "COMPANY") === vehicleOwnershipFilter);
+    return [
       { id: "", label: "ללא" },
-      ...lookup.vehicles.map((v) => {
+      ...list.map((v) => {
         const ownership = VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"];
         const base = v.model ? `${v.licensePlate} · ${v.model}` : v.licensePlate;
         return { id: v.licensePlate, label: `${ownership} · ${base}` };
       }),
-    ],
-    [lookup.vehicles]
-  );
+    ];
+  }, [lookup.vehicles, vehicleOwnershipFilter]);
   const machineOpts: SelectOption[] = useMemo(
     () => [{ id: "", label: "ללא" }, ...lookup.machineryUnits.map((m) => ({ id: m.id, label: m.name }))],
     [lookup.machineryUnits]
@@ -255,13 +259,7 @@ export function WorkScheduleSection() {
         material ? ensureMaster("material", material) : Promise.resolve(null),
       ]);
 
-      const plate =
-        lookup.vehicles.find(
-          (v) =>
-            v.licensePlate === form.vehiclePlate ||
-            `${v.licensePlate} · ${v.model || ""}`.trim() === form.vehiclePlate
-        )?.licensePlate ||
-        (form.vehiclePlate === "ללא" ? "" : form.vehiclePlate);
+      const plate = form.vehiclePlate || "";
 
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -299,7 +297,9 @@ export function WorkScheduleSection() {
     if (!form.vehiclePlate) return "";
     const v = lookup.vehicles.find((x) => x.licensePlate === form.vehiclePlate);
     if (!v) return form.vehiclePlate;
-    return v.model ? `${v.licensePlate} · ${v.model}` : v.licensePlate;
+    const ownership = VEHICLE_OWNERSHIP_LABELS[v.ownership || "COMPANY"];
+    const base = v.model ? `${v.licensePlate} · ${v.model}` : v.licensePlate;
+    return `${ownership} · ${base}`;
   };
 
   return (
@@ -701,20 +701,60 @@ export function WorkScheduleSection() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <SearchableSelect
-                label="כלי רכב"
-                value={vehicleDisplayValue()}
-                options={vehicleOpts}
-                allowCreate={false}
-                onChange={(label, opt) => {
-                  if (!label || label === "ללא" || opt?.id === "") {
-                    setForm((f) => ({ ...f, vehiclePlate: "" }));
-                    return;
-                  }
-                  const v = lookup.vehicles.find((x) => x.id === opt?.id);
-                  setForm((f) => ({ ...f, vehiclePlate: v?.licensePlate || label.split(" · ")[0] }));
-                }}
-              />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold">סוג כלי רכב</span>
+                  <div className="flex gap-1">
+                    {[
+                      { id: "all" as const, label: "הכל" },
+                      { id: "COMPANY" as const, label: "רכב חברה" },
+                      { id: "CONTRACTOR" as const, label: "רכב קבלן" },
+                    ].map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => {
+                          setVehicleOwnershipFilter(o.id);
+                          // If selected vehicle doesn't match new filter, clear it
+                          if (
+                            o.id !== "all" &&
+                            form.vehiclePlate &&
+                            (lookup.vehicles.find((v) => v.licensePlate === form.vehiclePlate)?.ownership || "COMPANY") !==
+                              o.id
+                          ) {
+                            setForm((f) => ({ ...f, vehiclePlate: "" }));
+                          }
+                        }}
+                        className={`rounded-md px-2 py-1 text-[11px] font-extrabold border ${
+                          vehicleOwnershipFilter === o.id
+                            ? "bg-primary text-white border-primary"
+                            : "bg-card border-border hover:border-primary/40"
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <SearchableSelect
+                  label="כלי רכב"
+                  value={vehicleDisplayValue()}
+                  options={vehicleOpts}
+                  allowCreate={false}
+                  onChange={(label, opt) => {
+                    // typing: don't mutate stored value (single source of truth is plate)
+                    if (!opt) {
+                      if (!label) setForm((f) => ({ ...f, vehiclePlate: "" }));
+                      return;
+                    }
+                    if (!opt.id) {
+                      setForm((f) => ({ ...f, vehiclePlate: "" }));
+                      return;
+                    }
+                    setForm((f) => ({ ...f, vehiclePlate: opt.id }));
+                  }}
+                />
+              </div>
               <SearchableSelect
                 label="מכונה"
                 value={
