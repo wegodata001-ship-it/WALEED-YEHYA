@@ -24,7 +24,7 @@ export async function findOpenShift(organizationId: string, employeeId: string) 
   });
 }
 
-/** Active field task the employee must finish before leaving shift. */
+/** Active field task (used for UI hints / reports only; not for shift checkout gating). */
 export async function findActiveFieldTask(organizationId: string, employeeId: string) {
   return prisma.fieldTask.findFirst({
     where: {
@@ -43,5 +43,4 @@ export async function findActiveFieldTask(organizationId: string, employeeId: st
 
 export const SHIFT_GATE_ERRORS = {
   NO_OPEN_SHIFT: "לא ניתן להתחיל משימה לפני כניסה למשמרת.",
-  ACTIVE_TASK_ON_CHECKOUT: "קיימת משימה פעילה. יש לסיים או לעצור את המשימה לפני יציאה מהמשמרת.",
 } as const;

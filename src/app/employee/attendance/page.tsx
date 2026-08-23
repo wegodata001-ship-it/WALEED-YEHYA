@@ -121,9 +121,6 @@ export default function EmployeeAttendancePage() {
       if (!res.ok) {
         setMsgError(true);
         setMsg(data.error || "שגיאה");
-        if (data.code === "ACTIVE_TASK" || res.status === 409) {
-          setBlockActiveTask(true);
-        }
         return;
       }
       const hours =

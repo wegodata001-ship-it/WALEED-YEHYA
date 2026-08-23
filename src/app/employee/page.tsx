@@ -257,14 +257,6 @@ export default function EmployeeHomePage() {
               >
                 {shiftMsg}
               </p>
-              {shiftError && /משימה פעילה/.test(shiftMsg) && (
-                <Link
-                  href="/employee/schedule"
-                  className="block text-center rounded-xl bg-white text-primary-dark py-2.5 text-sm font-extrabold"
-                >
-                  מעבר לסידור העבודה
-                </Link>
-              )}
             </div>
           )}
         </section>
