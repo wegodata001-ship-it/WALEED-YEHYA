@@ -4,6 +4,7 @@ import { getDefaultOrg } from "@/lib/org";
 import { MachineryUnitType } from "@prisma/client";
 import { handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 import { cacheDeletePrefix } from "@/lib/ttl-cache";
+import { parseFuelLitersFromNotes } from "@/lib/vehicle-fuel";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,12 +19,20 @@ export async function GET(req: NextRequest) {
         name: true,
         unitType: true,
         unitNumber: true,
+        vehicleId: true,
+        vehicle: { select: { licensePlate: true, notes: true } },
         headerColor: true,
         sortOrder: true,
         isActive: true,
       },
     });
-    return NextResponse.json(units);
+    return NextResponse.json(
+      units.map((u) => ({
+        ...u,
+        vehicleLicensePlate: u.vehicle?.licensePlate || null,
+        vehicleFuelLiters: parseFuelLitersFromNotes(u.vehicle?.notes),
+      }))
+    );
   } catch (e) {
     return handleApiAuth(e);
   }

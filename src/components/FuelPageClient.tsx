@@ -27,11 +27,25 @@ type Source = {
   currentLevel: number;
 };
 
+type HistoryTx = {
+  id: string;
+  transactionDate: string;
+  liters: number;
+  transactionType: string;
+  licensePlate: string | null;
+  vehicle: { licensePlate: string } | null;
+  operator: { firstName: string; lastName: string } | null;
+  recipient: { name: string; category: string } | null;
+};
+
 export function FuelPageClient() {
   const [tab, setTab] = useState<"grid" | "list">("grid");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historySource, setHistorySource] = useState<Source | null>(null);
+  const [historyTx, setHistoryTx] = useState<HistoryTx[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,6 +84,27 @@ export function FuelPageClient() {
       clearTimeout(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!historySource) return;
+    const ac = new AbortController();
+    setHistoryLoading(true);
+    fetch(`/api/fuel?limit=160&sourceId=${encodeURIComponent(historySource.id)}`, { signal: ac.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setHistoryTx(
+            data.map((t: HistoryTx & { liters: unknown; totalCost?: unknown }) => ({
+              ...t,
+              liters: Number(t.liters),
+            }))
+          );
+        } else setHistoryTx([]);
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+    return () => ac.abort();
+  }, [historySource]);
 
   const totalLiters = transactions.reduce((s, t) => s + Number(t.liters), 0);
 
@@ -110,7 +145,7 @@ export function FuelPageClient() {
               <div
                 key={s.id}
                 className={`rounded-lg border px-3 py-2 card-shadow ${
-                  pct < 25 ? "border-danger/50 bg-red-50" : "border-border bg-card"
+                  s.capacityLiters && pct < 20 ? "border-danger/50 bg-red-50" : "border-border bg-card"
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
@@ -120,9 +155,91 @@ export function FuelPageClient() {
                   </div>
                   <p className="text-xl font-bold tabular-nums">{Number(s.currentLevel).toFixed(0)} ל׳</p>
                 </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setHistorySource(s)}
+                    className="text-xs font-bold text-primary underline"
+                  >
+                    היסטוריית תדלוקים
+                  </button>
+                </div>
+                {s.capacityLiters != null && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-xs text-muted">
+                      <span>
+                        קיבולת: <span className="font-semibold tabular-nums">{Number(s.capacityLiters).toFixed(0)} ל׳</span>
+                      </span>
+                      <span className={pct < 20 ? "font-bold text-danger" : "font-bold text-foreground"}>
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="mt-1 h-2 w-full rounded-full bg-muted/40 overflow-hidden">
+                      <div
+                        className={`h-full ${pct < 20 ? "bg-danger" : "bg-primary"}`}
+                        style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {historySource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setHistorySource(null)} />
+          <div className="relative bg-card rounded-2xl border p-5 max-w-lg w-full card-shadow space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg">היסטוריית תנועות דלק</h3>
+                <p className="text-sm text-muted">{historySource.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistorySource(null)}
+                className="rounded-lg border px-2 py-1 text-xs font-bold"
+              >
+                סגור
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div className="py-10 flex justify-center">
+                <SmallLoader />
+              </div>
+            ) : (
+              <div className="max-h-[60vh] overflow-auto rounded-xl border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 text-xs text-muted">
+                    <tr>
+                      <th className="p-2 text-right font-bold">תאריך</th>
+                      <th className="p-2 text-right font-bold">יעד</th>
+                      <th className="p-2 text-right font-bold">ליטרים</th>
+                      <th className="p-2 text-right font-bold">עובד</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {historyTx.map((t) => (
+                      <tr key={t.id} className="hover:bg-muted/20">
+                        <td className="p-2 whitespace-nowrap">{new Date(t.transactionDate).toLocaleString("he-IL")}</td>
+                        <td className="p-2">
+                          {t.licensePlate || t.vehicle?.licensePlate || t.recipient?.name || "—"}
+                        </td>
+                        <td className="p-2 font-bold tabular-nums">{Number(t.liters).toFixed(0)} ל׳</td>
+                        <td className="p-2">
+                          {t.operator ? `${t.operator.firstName} ${t.operator.lastName || ""}`.trim() : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {historyTx.length === 0 && <p className="p-6 text-center text-muted">אין תנועות</p>}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

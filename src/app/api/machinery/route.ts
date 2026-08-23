@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
 import { isEmployeeRole } from "@/lib/roles";
+import { parseFuelLitersFromNotes, upsertFuelLitersInNotes } from "@/lib/vehicle-fuel";
+import { cacheDeletePrefix } from "@/lib/ttl-cache";
 
 export async function GET(req: NextRequest) {
   try {
@@ -69,6 +71,10 @@ export async function POST(req: NextRequest) {
         })
       : null;
 
+    const fuelUsedLitersRaw = body.fuelUsedLiters;
+    const fuelUsedLiters =
+      fuelUsedLitersRaw === "" || fuelUsedLitersRaw == null ? null : Number(fuelUsedLitersRaw);
+
     const log = await prisma.machineryWorkLog.create({
       data: {
         organizationId: org.id,
@@ -90,7 +96,10 @@ export async function POST(req: NextRequest) {
         choppingMechanism: body.choppingMechanism || "NONE",
         startTime: body.startTime ? new Date(body.startTime) : null,
         endTime: body.endTime ? new Date(body.endTime) : null,
-        notes: body.notes || null,
+        notes:
+          fuelUsedLiters != null && Number.isFinite(fuelUsedLiters) && fuelUsedLiters > 0
+            ? `${body.notes || ""}${body.notes ? "\n" : ""}__fuel_used_liters:${fuelUsedLiters}__`
+            : body.notes || null,
         gpsLat: body.gpsLat ?? null,
         gpsLng: body.gpsLng ?? null,
         photoUrl: body.photoUrl || null,
@@ -100,6 +109,25 @@ export async function POST(req: NextRequest) {
       },
       include: { operator: true, vehicle: true, plot: true, machineryUnit: true },
     });
+
+    if (fuelUsedLiters != null && Number.isFinite(fuelUsedLiters) && fuelUsedLiters > 0) {
+      const vehicleId = (body.vehicleId || unit?.vehicleId || null) as string | null;
+      if (vehicleId) {
+        const v = await prisma.vehicle.findUnique({ where: { id: vehicleId }, select: { id: true, notes: true } });
+        if (v) {
+          const before = parseFuelLitersFromNotes(v.notes) ?? 0;
+          const next = Math.max(0, before - fuelUsedLiters);
+          await prisma.vehicle.update({
+            where: { id: v.id },
+            data: { notes: upsertFuelLitersInNotes(v.notes, next) },
+          });
+        }
+      }
+    }
+
+    // Ensure real-time fuel display updates in employee/manager UIs.
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
 
     await prisma.auditLog.create({
       data: {

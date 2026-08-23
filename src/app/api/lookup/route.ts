@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { handleApiAuth, requireAuthUser } from "@/lib/api-auth";
 import { parseOwnershipFromNotes } from "@/lib/vehicle-ownership";
+import { parseFuelLitersFromNotes } from "@/lib/vehicle-fuel";
 import { cacheGet, cacheSet } from "@/lib/ttl-cache";
 
 export async function GET(req: NextRequest) {
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
             unitType: true,
             unitNumber: true,
             vehicleId: true,
+            vehicle: { select: { licensePlate: true, notes: true } },
           },
         }),
       ]);
@@ -47,9 +49,18 @@ export async function GET(req: NextRequest) {
           make: v.make,
           model: v.model,
           ownership: parseOwnershipFromNotes(v.notes),
+          fuelLiters: parseFuelLitersFromNotes(v.notes),
         })),
         employees,
-        machineryUnits,
+        machineryUnits: machineryUnits.map((m) => ({
+          id: m.id,
+          name: m.name,
+          unitType: m.unitType,
+          unitNumber: m.unitNumber,
+          vehicleId: m.vehicleId,
+          vehicleLicensePlate: m.vehicle?.licensePlate || null,
+          vehicleFuelLiters: parseFuelLitersFromNotes(m.vehicle?.notes),
+        })),
         org: { id: org.id, name: org.name },
       };
       cacheSet(cacheKey, payload, 30_000);
@@ -108,6 +119,7 @@ export async function GET(req: NextRequest) {
             unitType: true,
             unitNumber: true,
             vehicleId: true,
+            vehicle: { select: { licensePlate: true, notes: true } },
           },
         }),
         prisma.farmer.findMany({
@@ -128,6 +140,7 @@ export async function GET(req: NextRequest) {
       make: v.make,
       model: v.model,
       ownership: parseOwnershipFromNotes(v.notes),
+      fuelLiters: parseFuelLitersFromNotes(v.notes),
     }));
 
     const payload = {
@@ -136,7 +149,15 @@ export async function GET(req: NextRequest) {
       employees,
       fuelSources,
       fuelRecipients,
-      machineryUnits,
+      machineryUnits: machineryUnits.map((m) => ({
+        id: m.id,
+        name: m.name,
+        unitType: m.unitType,
+        unitNumber: m.unitNumber,
+        vehicleId: m.vehicleId,
+        vehicleLicensePlate: m.vehicle?.licensePlate || null,
+        vehicleFuelLiters: parseFuelLitersFromNotes(m.vehicle?.notes),
+      })),
       farmers,
       moshavim,
       org: { id: org.id, name: org.name },

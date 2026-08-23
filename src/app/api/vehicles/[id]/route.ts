@@ -9,6 +9,7 @@ import {
   stripOwnershipFromNotes,
   withOwnershipField,
 } from "@/lib/vehicle-ownership";
+import { parseFuelLitersFromNotes, upsertFuelLitersInNotes } from "@/lib/vehicle-fuel";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -48,6 +49,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         : parseOwnershipFromNotes(old.notes);
     const plainNotes =
       body.notes !== undefined ? body.notes : stripOwnershipFromNotes(old.notes);
+    const preservedFuel = parseFuelLitersFromNotes(old.notes);
+    const nextFuel =
+      body.fuelLiters !== undefined
+        ? body.fuelLiters === null
+          ? null
+          : body.fuelLiters === ""
+            ? preservedFuel
+            : Number(body.fuelLiters)
+        : preservedFuel;
 
     const vehicle = await prisma.vehicle.update({
       where: { id },
@@ -70,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         windshieldInsurance: body.windshieldInsurance !== undefined ? parseNum(body.windshieldInsurance) : old.windshieldInsurance,
         registeredTo: body.registeredTo !== undefined ? body.registeredTo : old.registeredTo,
         agentPhone: body.agentPhone !== undefined ? body.agentPhone : old.agentPhone,
-        notes: encodeOwnershipInNotes(ownership, plainNotes),
+        notes: upsertFuelLitersInNotes(encodeOwnershipInNotes(ownership, plainNotes), nextFuel),
         isActive: body.isActive !== undefined ? body.isActive : old.isActive,
       },
     });

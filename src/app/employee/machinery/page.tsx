@@ -21,6 +21,8 @@ type MachineryUnit = {
   name: string;
   unitType: string;
   unitNumber: string | null;
+  vehicleLicensePlate?: string | null;
+  vehicleFuelLiters?: number | null;
 };
 
 type Lookup = {
@@ -47,6 +49,7 @@ export default function MobileMachineryPage() {
     materialType: "",
     quantityUnit: "DUNAM",
     acresWorked: "",
+    fuelUsedLiters: "",
     baleCategory: "",
     baleCount: "",
     choppingMechanism: "NONE",
@@ -102,6 +105,7 @@ export default function MobileMachineryPage() {
 
   const selectedUnit = lookup?.machineryUnits.find((u) => u.id === form.machineryUnitId);
   const isBaler = selectedUnit?.unitType === "BALER";
+  const selectedFuel = selectedUnit?.vehicleFuelLiters != null ? Number(selectedUnit.vehicleFuelLiters) : null;
 
   const groupedUnits = {
     harvesters: lookup?.machineryUnits.filter((u) => u.unitType === "HARVESTER") || [],
@@ -122,6 +126,7 @@ export default function MobileMachineryPage() {
       materialType: form.materialType || null,
       quantityUnit: form.quantityUnit,
       acresWorked: Number(form.acresWorked),
+      fuelUsedLiters: form.fuelUsedLiters ? Number(form.fuelUsedLiters) : null,
       baleCategory: form.baleCategory || null,
       baleCount: form.baleCount ? Number(form.baleCount) : null,
       choppingMechanism: form.choppingMechanism,
@@ -271,6 +276,18 @@ export default function MobileMachineryPage() {
           </Field>
         </div>
 
+        <Field label="צריכת דלק (ליטר)">
+          <input
+            type="number"
+            step="0.1"
+            value={form.fuelUsedLiters}
+            onChange={(e) => setForm({ ...form, fuelUsedLiters: e.target.value })}
+            className="field-input"
+            placeholder="אופציונלי"
+          />
+          <p className="mt-1 text-xs text-muted">אם ממלאים — ירד אוטומטית מהדלק הנוכחי של כלי הרכב/המכונה</p>
+        </Field>
+
         <Field label="מכונה / יחידה" required>
           <select
             required
@@ -291,6 +308,7 @@ export default function MobileMachineryPage() {
                 {groupedUnits.harvesters.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name} {u.unitNumber && u.unitNumber !== "0" ? `(${u.unitNumber})` : ""}
+                    {u.vehicleFuelLiters != null ? ` · דלק ${Number(u.vehicleFuelLiters).toFixed(0)} ל׳` : ""}
                   </option>
                 ))}
               </optgroup>
@@ -298,21 +316,30 @@ export default function MobileMachineryPage() {
             {groupedUnits.balers.length > 0 && (
               <optgroup label={MACHINERY_UNIT_LABELS.BALER}>
                 {groupedUnits.balers.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                    {u.vehicleFuelLiters != null ? ` · דלק ${Number(u.vehicleFuelLiters).toFixed(0)} ל׳` : ""}
+                  </option>
                 ))}
               </optgroup>
             )}
             {groupedUnits.rakes.length > 0 && (
               <optgroup label={MACHINERY_UNIT_LABELS.RAKE}>
                 {groupedUnits.rakes.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                    {u.vehicleFuelLiters != null ? ` · דלק ${Number(u.vehicleFuelLiters).toFixed(0)} ל׳` : ""}
+                  </option>
                 ))}
               </optgroup>
             )}
             {groupedUnits.combines.length > 0 && (
               <optgroup label={MACHINERY_UNIT_LABELS.COMBINE}>
                 {groupedUnits.combines.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                    {u.vehicleFuelLiters != null ? ` · דלק ${Number(u.vehicleFuelLiters).toFixed(0)} ל׳` : ""}
+                  </option>
                 ))}
               </optgroup>
             )}
@@ -392,6 +419,11 @@ export default function MobileMachineryPage() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
+          {selectedFuel != null && (
+            <p className="mt-1 text-xs text-muted">
+              דלק נוכחי: <span className="font-bold">{selectedFuel.toFixed(0)} ל׳</span>
+            </p>
+          )}
             </Field>
             <Field label="מס׳ אשכולות">
               <input

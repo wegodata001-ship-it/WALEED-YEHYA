@@ -28,6 +28,7 @@ type LookupVehicle = {
   make: string | null;
   model: string | null;
   ownership?: VehicleOwnership;
+  fuelLiters?: number | null;
 };
 
 type Lookup = {
@@ -252,9 +253,15 @@ export default function MobileFuelPage() {
                   <option key={v.id} value={v.id}>
                     {v.licensePlate}
                     {v.model ? ` · ${v.model}` : ""}
+                    {v.fuelLiters != null ? ` · דלק ${Number(v.fuelLiters).toFixed(0)} ל׳` : ""}
                   </option>
                 ))}
               </select>
+              {selectedVehicle?.fuelLiters != null && (
+                <p className="mt-1 text-xs text-muted">
+                  דלק נוכחי: <span className="font-bold">{Number(selectedVehicle.fuelLiters).toFixed(0)} ל׳</span>
+                </p>
+              )}
               {filteredVehicles.length === 0 && (
                 <p className="text-xs text-muted mt-1">
                   אין רכבים מסוג זה — יש להגדיר סוג בעלות במסך כלי רכב אצל המנהל

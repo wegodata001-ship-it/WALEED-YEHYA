@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 import { encodeOwnershipInNotes, withOwnershipField } from "@/lib/vehicle-ownership";
+import { upsertFuelLitersInNotes } from "@/lib/vehicle-fuel";
 import { cacheDeletePrefix } from "@/lib/ttl-cache";
 
 function parseDate(v: unknown) {
@@ -67,7 +68,10 @@ export async function POST(req: NextRequest) {
         windshieldInsurance: parseNum(body.windshieldInsurance),
         registeredTo: body.registeredTo || null,
         agentPhone: body.agentPhone || null,
-        notes: encodeOwnershipInNotes(body.ownership, body.notes || null),
+        notes: upsertFuelLitersInNotes(
+          encodeOwnershipInNotes(body.ownership, body.notes || null),
+          body.fuelLiters !== undefined && body.fuelLiters !== "" ? Number(body.fuelLiters) : null
+        ),
         isActive: body.isActive !== false,
       },
     });

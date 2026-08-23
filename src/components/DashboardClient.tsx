@@ -50,6 +50,10 @@ type Stats = {
   totalAcres: number;
   totalFuel: number;
   totalFuelCost: number;
+  fuelStockLiters?: number;
+  fuelConsumptionToday?: number;
+  fuelConsumptionWeek?: number;
+  fuelConsumptionMonth?: number;
   operators: number;
   workLogsCount: number;
   fuelLogsCount: number;
@@ -94,6 +98,8 @@ export function DashboardClient() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [fuelLevels, setFuelLevels] = useState<{ name: string; current: number; capacity: number | null }[]>([]);
+  const [lowFuelVehicles, setLowFuelVehicles] = useState<{ id: string; licensePlate: string; name: string; fuelLiters: number }[]>([]);
+  const [lowFuelMachines, setLowFuelMachines] = useState<{ id: string; name: string; licensePlate: string | null; fuelLiters: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLoading, setActiveLoading] = useState(true);
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
@@ -108,12 +114,18 @@ export function DashboardClient() {
       setStats(data.stats);
       setActivity(data.activity || []);
       setFuelLevels(data.fuelLevels || []);
+      setLowFuelVehicles(data.fuel?.lowVehicles || []);
+      setLowFuelMachines(data.fuel?.lowMachines || []);
     } catch (e) {
       if ((e as Error)?.name === "AbortError") return;
       setStats({
         totalAcres: 0,
         totalFuel: 0,
         totalFuelCost: 0,
+        fuelStockLiters: 0,
+        fuelConsumptionToday: 0,
+        fuelConsumptionWeek: 0,
+        fuelConsumptionMonth: 0,
         operators: 0,
         workLogsCount: 0,
         fuelLogsCount: 0,
@@ -135,6 +147,9 @@ export function DashboardClient() {
         tanksCount: 0,
       });
       setActivity([]);
+      setFuelLevels([]);
+      setLowFuelVehicles([]);
+      setLowFuelMachines([]);
     } finally {
       setLoading(false);
     }
@@ -402,6 +417,64 @@ export function DashboardClient() {
               ניהול מיכלים →
             </Link>
           </div>
+          <div className="mb-4 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card card-shadow p-3">
+              <p className="text-xs text-muted font-semibold">סך מלאי דלק</p>
+              <p className="text-2xl font-extrabold tabular-nums">{Number(stats.fuelStockLiters || 0).toFixed(0)} ל׳</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card card-shadow p-3">
+              <p className="text-xs text-muted font-semibold">צריכה היום</p>
+              <p className="text-2xl font-extrabold tabular-nums">{Number(stats.fuelConsumptionToday || 0).toFixed(0)} ל׳</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card card-shadow p-3">
+              <p className="text-xs text-muted font-semibold">צריכה שבוע/חודש</p>
+              <p className="text-sm font-bold tabular-nums">
+                שבוע: {Number(stats.fuelConsumptionWeek || 0).toFixed(0)} ל׳
+              </p>
+              <p className="text-sm font-bold tabular-nums">
+                חודש: {Number(stats.fuelConsumptionMonth || 0).toFixed(0)} ל׳
+              </p>
+            </div>
+          </div>
+
+          {(lowFuelVehicles.length > 0 || lowFuelMachines.length > 0) && (
+            <div className="mb-4 rounded-xl border border-danger/30 bg-red-50 p-4">
+              <p className="font-extrabold text-danger mb-2">התראות דלק נמוך</p>
+              {lowFuelVehicles.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-sm font-bold">כלי רכב</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {lowFuelVehicles.map((v) => (
+                      <Link
+                        key={v.id}
+                        href={`/fleet?q=${encodeURIComponent(v.licensePlate)}`}
+                        className="rounded-lg border border-danger/30 bg-white px-2 py-1 text-xs font-bold text-danger"
+                      >
+                        {v.licensePlate} · {Number(v.fuelLiters).toFixed(0)} ל׳
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {lowFuelMachines.length > 0 && (
+                <div>
+                  <p className="text-sm font-bold">מכונות</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {lowFuelMachines.map((m) => (
+                      <Link
+                        key={m.id}
+                        href={`/fleet?tab=journal&q=${encodeURIComponent(m.name)}`}
+                        className="rounded-lg border border-danger/30 bg-white px-2 py-1 text-xs font-bold text-danger"
+                      >
+                        {m.name} · {Number(m.fuelLiters).toFixed(0)} ל׳
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="work-card-grid">
             {fuelLevels.map((f) => {
               const pct = f.capacity ? Math.round((f.current / f.capacity) * 100) : null;
@@ -418,7 +491,7 @@ export function DashboardClient() {
                   ]}
                   qtyLabel="מלאי"
                   qty={`${f.current} ל׳`}
-                  className={pct != null && pct < 25 ? "border-danger/40" : ""}
+                  className={pct != null && pct < 20 ? "border-danger/40" : ""}
                 />
               );
             })}

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { handleApiAuth, requireManager } from "@/lib/api-auth";
 import { cacheGet, cacheSet } from "@/lib/ttl-cache";
+import { parseFuelLitersFromNotes } from "@/lib/vehicle-fuel";
 
 function parseRange(searchParams: URLSearchParams) {
   const year = Number(searchParams.get("year"));
@@ -33,7 +34,35 @@ export async function GET(req: NextRequest) {
   const cached = cacheGet<unknown>(cacheKey);
   if (cached) return NextResponse.json(cached);
 
-  const [workLogs, fuelTx, attendance, pendingMachinery, pendingFuel, lowFuel, maintenanceAlerts, employeesCount, customersCount, vehiclesCount, pendingTasks, pendingAtt, ledgerCount, customerLedgerCount, tasksAgg, tasksByStatus] = await Promise.all([
+  const today0 = new Date();
+  today0.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const weekStart = new Date(today0.getTime() - 7 * 86400000);
+  const monthStart = new Date(today0.getTime() - 30 * 86400000);
+
+  const [
+    workLogs,
+    fuelTx,
+    attendance,
+    pendingMachinery,
+    pendingFuel,
+    lowFuel,
+    maintenanceAlerts,
+    vehiclesForFuel,
+    machinesForFuel,
+    fuelOutTodayAgg,
+    fuelOutWeekAgg,
+    fuelOutMonthAgg,
+    employeesCount,
+    customersCount,
+    vehiclesCount,
+    pendingTasks,
+    pendingAtt,
+    ledgerCount,
+    customerLedgerCount,
+    tasksAgg,
+    tasksByStatus,
+  ] = await Promise.all([
     prisma.machineryWorkLog.findMany({
       where: { organizationId: org.id, workDate: { gte: start, lt: end } },
       select: {
@@ -93,6 +122,31 @@ export async function GET(req: NextRequest) {
         liftingInspectionExpiry: true,
       },
     }),
+    prisma.vehicle.findMany({
+      where: { organizationId: org.id, isActive: true },
+      select: { id: true, licensePlate: true, make: true, model: true, notes: true },
+    }),
+    prisma.machineryUnit.findMany({
+      where: { organizationId: org.id, isActive: true, vehicleId: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        unitType: true,
+        vehicle: { select: { licensePlate: true, notes: true } },
+      },
+    }),
+    prisma.fuelTransaction.aggregate({
+      where: { organizationId: org.id, transactionDate: { gte: today0, lt: now }, transactionType: { in: ["REFUEL_VEHICLE", "SUBCONTRACTOR_CHARGE"] } },
+      _sum: { liters: true },
+    }),
+    prisma.fuelTransaction.aggregate({
+      where: { organizationId: org.id, transactionDate: { gte: weekStart, lt: now }, transactionType: { in: ["REFUEL_VEHICLE", "SUBCONTRACTOR_CHARGE"] } },
+      _sum: { liters: true },
+    }),
+    prisma.fuelTransaction.aggregate({
+      where: { organizationId: org.id, transactionDate: { gte: monthStart, lt: now }, transactionType: { in: ["REFUEL_VEHICLE", "SUBCONTRACTOR_CHARGE"] } },
+      _sum: { liters: true },
+    }),
     prisma.employee.count({ where: { organizationId: org.id, isActive: true } }),
     prisma.farmer.count({ where: { organizationId: org.id, isActive: true } }),
     prisma.vehicle.count({ where: { organizationId: org.id, isActive: true } }),
@@ -141,10 +195,24 @@ export async function GET(req: NextRequest) {
   const tasksCompleted = statusCounts.get("COMPLETED") || 0;
 
   const fuelAlerts = lowFuel.filter(
-    (s) => s.capacityLiters && Number(s.currentLevel) / Number(s.capacityLiters) < 0.25
+    (s) => s.capacityLiters && Number(s.currentLevel) / Number(s.capacityLiters) < 0.2
   ).length;
 
-  const now = new Date();
+  const fuelStockLiters = lowFuel.reduce((s, t) => s + Number(t.currentLevel), 0);
+  const fuelConsumptionToday = Number((fuelOutTodayAgg as { _sum?: { liters?: unknown } })._sum?.liters || 0);
+  const fuelConsumptionWeek = Number((fuelOutWeekAgg as { _sum?: { liters?: unknown } })._sum?.liters || 0);
+  const fuelConsumptionMonth = Number((fuelOutMonthAgg as { _sum?: { liters?: unknown } })._sum?.liters || 0);
+
+  const lowFuelVehicles = (vehiclesForFuel as { id: string; licensePlate: string; make: string | null; model: string | null; notes: string | null }[])
+    .map((v) => ({ ...v, fuelLiters: parseFuelLitersFromNotes(v.notes) }))
+    .filter((v) => v.fuelLiters != null && Number(v.fuelLiters) < 15)
+    .slice(0, 8);
+
+  const lowFuelMachines = (machinesForFuel as { id: string; name: string; unitType: string; vehicle: { licensePlate: string; notes: string | null } | null }[])
+    .map((m) => ({ ...m, fuelLiters: parseFuelLitersFromNotes(m.vehicle?.notes) }))
+    .filter((m) => m.fuelLiters != null && Number(m.fuelLiters) < 15)
+    .slice(0, 8);
+
   const in30 = new Date(now.getTime() + 30 * 86400000);
   let expiryAlerts = 0;
   for (const v of maintenanceAlerts) {
@@ -181,6 +249,10 @@ export async function GET(req: NextRequest) {
       totalAcres: Math.round(totalAcres * 10) / 10,
       totalFuel: Math.round(totalFuel),
       totalFuelCost: Math.round(totalFuelCost),
+      fuelStockLiters: Math.round(fuelStockLiters),
+      fuelConsumptionToday: Math.round(fuelConsumptionToday),
+      fuelConsumptionWeek: Math.round(fuelConsumptionWeek),
+      fuelConsumptionMonth: Math.round(fuelConsumptionMonth),
       operators,
       workLogsCount: workLogs.length,
       fuelLogsCount: fuelTx.length,
@@ -209,6 +281,20 @@ export async function GET(req: NextRequest) {
       current: Number(s.currentLevel),
       capacity: s.capacityLiters ? Number(s.capacityLiters) : null,
     })),
+    fuel: {
+      lowVehicles: lowFuelVehicles.map((v) => ({
+        id: v.id,
+        licensePlate: v.licensePlate,
+        name: v.model || v.make || v.licensePlate,
+        fuelLiters: Number(v.fuelLiters),
+      })),
+      lowMachines: lowFuelMachines.map((m) => ({
+        id: m.id,
+        name: m.name,
+        licensePlate: m.vehicle?.licensePlate || null,
+        fuelLiters: Number(m.fuelLiters),
+      })),
+    },
   };
   cacheSet(cacheKey, payload, 8_000);
   return NextResponse.json(payload);

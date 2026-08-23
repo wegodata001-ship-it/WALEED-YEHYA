@@ -17,6 +17,7 @@ export type VehicleRow = {
   make: string | null;
   model: string | null;
   year: number | null;
+  fuelLiters?: number | null;
   testExpiryDate: string | null;
   liftingInspectionExpiry: string | null;
   compulsoryInsurance: number | null;
@@ -37,10 +38,22 @@ type MachineryRow = {
   name: string;
   unitType: string;
   unitNumber: string | null;
+  vehicleId?: string | null;
+  vehicleLicensePlate?: string | null;
+  vehicleFuelLiters?: number | null;
   isActive?: boolean;
 };
 
 type TypeFilter = "all" | "COMPANY" | "CONTRACTOR" | "MACHINE";
+
+type FuelTx = {
+  id: string;
+  transactionDate: string;
+  liters: number;
+  transactionType: string;
+  source: { name: string } | null;
+  operator: { firstName: string; lastName: string } | null;
+};
 
 type UnifiedRow =
   | {
@@ -70,6 +83,7 @@ const emptyVehicle = (): Record<string, unknown> => ({
   make: "",
   model: "",
   year: "",
+  fuelLiters: "",
   testExpiryDate: "",
   liftingInspectionExpiry: "",
   compulsoryInsurance: "",
@@ -101,6 +115,7 @@ const vehicleFields = [
   { key: "model", label: "דגם", required: true },
   { key: "make", label: "יצרן" },
   { key: "year", label: "שנת ייצור", type: "number" as const },
+  { key: "fuelLiters", label: "דלק נוכחי (ל׳)", type: "number" as const },
   {
     key: "status",
     label: "סטטוס",
@@ -135,6 +150,7 @@ function serialize(v: VehicleRow): Record<string, unknown> {
     make: v.make || "",
     model: v.model || "",
     year: v.year || "",
+    fuelLiters: v.fuelLiters ?? "",
     testExpiryDate: toInputDate(v.testExpiryDate),
     liftingInspectionExpiry: toInputDate(v.liftingInspectionExpiry),
     compulsoryInsurance: v.compulsoryInsurance ?? "",
@@ -157,6 +173,7 @@ function normalizeVehicle(v: Record<string, unknown>): VehicleRow {
     make: (v.make as string) || null,
     model: (v.model as string) || null,
     year: v.year != null ? Number(v.year) : null,
+    fuelLiters: v.fuelLiters != null ? Number(v.fuelLiters) : null,
     testExpiryDate: v.testExpiryDate ? String(v.testExpiryDate) : null,
     liftingInspectionExpiry: v.liftingInspectionExpiry ? String(v.liftingInspectionExpiry) : null,
     compulsoryInsurance: v.compulsoryInsurance != null ? Number(v.compulsoryInsurance) : null,
@@ -191,6 +208,9 @@ export function FleetPageClient({
   const [vehicleModal, setVehicleModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
   const [viewingVehicle, setViewingVehicle] = useState<VehicleRow | null>(null);
+  const [fuelHistoryTarget, setFuelHistoryTarget] = useState<{ vehicleId: string; label: string } | null>(null);
+  const [fuelHistoryTx, setFuelHistoryTx] = useState<FuelTx[]>([]);
+  const [fuelHistoryLoading, setFuelHistoryLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteMachineId, setDeleteMachineId] = useState<string | null>(null);
   const [machineForm, setMachineForm] = useState({ name: "", unitType: "HARVESTER", unitNumber: "" });
@@ -218,6 +238,29 @@ export function FleetPageClient({
   useEffect(() => {
     loadMachines();
   }, [loadMachines]);
+
+  useEffect(() => {
+    if (!fuelHistoryTarget) return;
+    const ac = new AbortController();
+    setFuelHistoryLoading(true);
+    fetch(`/api/fuel?limit=120&vehicleId=${encodeURIComponent(fuelHistoryTarget.vehicleId)}`, { signal: ac.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setFuelHistoryTx(
+            data.map((t: FuelTx & { liters: unknown }) => ({
+              ...t,
+              liters: Number(t.liters),
+            }))
+          );
+        } else {
+          setFuelHistoryTx([]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setFuelHistoryLoading(false));
+    return () => ac.abort();
+  }, [fuelHistoryTarget]);
 
   const rows: UnifiedRow[] = useMemo(() => {
     const term = search.trim();
@@ -452,12 +495,13 @@ export function FleetPageClient({
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-border bg-card card-shadow">
-          <table className="w-full min-w-[640px] text-sm text-right">
+          <table className="w-full min-w-[720px] text-sm text-right">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs text-muted">
                 <th className="px-3 py-2.5 font-bold">סוג</th>
                 <th className="px-3 py-2.5 font-bold">שם</th>
                 <th className="px-3 py-2.5 font-bold">מספר</th>
+                <th className="px-3 py-2.5 font-bold">דלק נוכחי</th>
                 <th className="px-3 py-2.5 font-bold">סטטוס</th>
                 <th className="px-3 py-2.5 font-bold">פעולות</th>
               </tr>
@@ -468,6 +512,23 @@ export function FleetPageClient({
                   <td className="px-3 py-2.5 font-semibold whitespace-nowrap">{row.typeLabel}</td>
                   <td className="px-3 py-2.5 font-bold text-primary-dark">{row.name}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{row.number}</td>
+                  <td className="px-3 py-2.5 font-bold tabular-nums">
+                    {row.kind === "vehicle" ? (
+                      row.vehicle.fuelLiters != null ? (
+                        <span className={Number(row.vehicle.fuelLiters) < 15 ? "text-danger" : ""}>
+                          {Number(row.vehicle.fuelLiters).toFixed(0)} ל׳
+                        </span>
+                      ) : (
+                        "—"
+                      )
+                    ) : row.machine.vehicleFuelLiters != null ? (
+                      <span className={Number(row.machine.vehicleFuelLiters) < 15 ? "text-danger" : ""}>
+                        {Number(row.machine.vehicleFuelLiters).toFixed(0)} ל׳
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-3 py-2.5">{row.statusLabel}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap gap-2 justify-end">
@@ -479,6 +540,18 @@ export function FleetPageClient({
                             className="inline-flex items-center gap-1 text-xs font-bold text-primary"
                           >
                             <Eye className="h-3 w-3" /> צפייה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFuelHistoryTarget({
+                                vehicleId: row.vehicle.id,
+                                label: `${row.vehicle.licensePlate}${row.vehicle.model ? ` · ${row.vehicle.model}` : ""}`,
+                              })
+                            }
+                            className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                          >
+                            <CircleDot className="h-3 w-3" /> היסטוריית תדלוקים
                           </button>
                           <button
                             type="button"
@@ -511,6 +584,20 @@ export function FleetPageClient({
                           >
                             <Eye className="h-3 w-3" /> צפייה
                           </button>
+                          {row.machine.vehicleId && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFuelHistoryTarget({
+                                  vehicleId: row.machine.vehicleId as string,
+                                  label: `${row.machine.name}${row.machine.vehicleLicensePlate ? ` · ${row.machine.vehicleLicensePlate}` : ""}`,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 text-xs font-bold text-primary"
+                            >
+                              <CircleDot className="h-3 w-3" /> היסטוריית תדלוקים
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
@@ -672,6 +759,12 @@ export function FleetPageClient({
             <p className="font-extrabold text-primary-dark">{editingMachine.name}</p>
             <p className="text-sm">{MACHINERY_UNIT_LABELS[editingMachine.unitType] || editingMachine.unitType}</p>
             <p className="text-sm text-muted">מס׳ יחידה: {editingMachine.unitNumber || "—"}</p>
+            <p className="text-sm text-muted">
+              דלק נוכחי:{" "}
+              <span className="font-bold text-foreground">
+                {editingMachine.vehicleFuelLiters != null ? `${Number(editingMachine.vehicleFuelLiters).toFixed(0)} ל׳` : "—"}
+              </span>
+            </p>
             <button type="button" onClick={() => setMachineModal(null)} className="w-full rounded-xl border py-2 font-bold">
               סגור
             </button>
@@ -701,12 +794,73 @@ export function FleetPageClient({
               {viewingVehicle.model || "—"}
             </p>
             <p>
+              <span className="text-muted">דלק נוכחי: </span>
+              <strong>{viewingVehicle.fuelLiters != null ? `${Number(viewingVehicle.fuelLiters).toFixed(0)} ל׳` : "—"}</strong>
+            </p>
+            <p>
               <span className="text-muted">טסט עד: </span>
               {formatDateIL(viewingVehicle.testExpiryDate) || "—"}
             </p>
             <button type="button" onClick={() => setViewingVehicle(null)} className="w-full mt-3 rounded-xl border py-2 font-bold">
               סגור
             </button>
+          </div>
+        </div>
+      )}
+
+      {fuelHistoryTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setFuelHistoryTarget(null)} />
+          <div className="relative bg-card rounded-2xl border p-5 max-w-lg w-full card-shadow space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg">היסטוריית תדלוקים</h3>
+                <p className="text-sm text-muted">
+                  {fuelHistoryTarget.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFuelHistoryTarget(null)}
+                className="rounded-lg border px-2 py-1 text-xs font-bold"
+              >
+                סגור
+              </button>
+            </div>
+
+            {fuelHistoryLoading ? (
+              <div className="py-8 flex justify-center">
+                <InlineLoader />
+              </div>
+            ) : (
+              <div className="max-h-[60vh] overflow-auto rounded-xl border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 text-xs text-muted">
+                    <tr>
+                      <th className="p-2 text-right font-bold">תאריך</th>
+                      <th className="p-2 text-right font-bold">מקור</th>
+                      <th className="p-2 text-right font-bold">ליטרים</th>
+                      <th className="p-2 text-right font-bold">עובד</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {fuelHistoryTx.map((t) => (
+                      <tr key={t.id} className="hover:bg-muted/20">
+                        <td className="p-2 whitespace-nowrap">
+                          {new Date(t.transactionDate).toLocaleString("he-IL")}
+                        </td>
+                        <td className="p-2">{t.source?.name || "—"}</td>
+                        <td className="p-2 font-bold tabular-nums">{Number(t.liters).toFixed(0)} ל׳</td>
+                        <td className="p-2">
+                          {t.operator ? `${t.operator.firstName} ${t.operator.lastName || ""}`.trim() : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {fuelHistoryTx.length === 0 && <p className="p-6 text-center text-muted">אין תדלוקים לרכב זה</p>}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -4,12 +4,17 @@ import { getDefaultOrg } from "@/lib/org";
 import { FuelTransactionType, LedgerCategory, LedgerEntryType } from "@prisma/client";
 import { parseDateRange } from "@/lib/dateRange";
 import { ApiAuthError, handleApiAuth, requireAuthUser, requireManager } from "@/lib/api-auth";
+import { cacheDeletePrefix } from "@/lib/ttl-cache";
+import { parseFuelLitersFromNotes, upsertFuelLitersInNotes } from "@/lib/vehicle-fuel";
 
 export async function GET(req: NextRequest) {
   try {
     await requireManager();
   const { searchParams } = new URL(req.url);
   const limit = Number(searchParams.get("limit") || 50);
+  const vehicleId = searchParams.get("vehicleId");
+  const sourceId = searchParams.get("sourceId") || searchParams.get("fuelSourceId");
+  const recipientId = searchParams.get("recipientId");
   const hasDate =
     searchParams.has("year") ||
     searchParams.has("month") ||
@@ -18,9 +23,12 @@ export async function GET(req: NextRequest) {
   const range = hasDate ? parseDateRange(searchParams) : null;
 
   const transactions = await prisma.fuelTransaction.findMany({
-    where: range
-      ? { transactionDate: { gte: range.start, lt: range.end } }
-      : undefined,
+    where: {
+      ...(range ? { transactionDate: { gte: range.start, lt: range.end } } : {}),
+      ...(vehicleId ? { vehicleId } : {}),
+      ...(sourceId ? { sourceId } : {}),
+      ...(recipientId ? { recipientId } : {}),
+    },
     select: {
       id: true,
       transactionDate: true,
@@ -54,6 +62,9 @@ export async function POST(req: NextRequest) {
     const org = await getDefaultOrg();
 
     const liters = Number(body.liters);
+    if (!Number.isFinite(liters) || liters <= 0) {
+      return NextResponse.json({ error: "כמות ליטרים לא תקינה" }, { status: 400 });
+    }
 
     const recipient = body.recipientId
       ? await prisma.fuelRecipient.findUnique({ where: { id: body.recipientId } })
@@ -82,14 +93,31 @@ export async function POST(req: NextRequest) {
     const isInbound = txType === "TANK_FILL" || txType === "TANK_TRANSFER";
     const totalCost = liters * pricePerLiter;
     const levelSourceId = body.fuelSourceId || body.sourceId || recipient?.fuelSourceId || null;
+    const sourceIdForTx = levelSourceId || (body.sourceId || recipient?.fuelSourceId || null);
 
     const tx = await prisma.$transaction(async (txClient) => {
+      const beforeSource = levelSourceId
+        ? await txClient.fuelSource.findUnique({
+            where: { id: levelSourceId },
+            select: { id: true, currentLevel: true, capacityLiters: true, sourceType: true },
+          })
+        : null;
+
+      const beforeVehicle =
+        vehicleId && (txType === "REFUEL_VEHICLE" || txType === "SUBCONTRACTOR_CHARGE")
+          ? await txClient.vehicle.findUnique({
+              where: { id: vehicleId },
+              select: { id: true, notes: true },
+            })
+          : null;
+
       const transaction = await txClient.fuelTransaction.create({
         data: {
           organizationId: org.id,
           clientId: body.clientId || null,
           transactionDate: new Date(body.transactionDate || new Date()),
-          sourceId: isInbound ? null : body.sourceId || recipient?.fuelSourceId || null,
+          // Keep a reference to the physical tank even for inbound fills (for per-tank history)
+          sourceId: sourceIdForTx,
           recipientId: recipient?.id || body.recipientId || null,
           vehicleId: vehicleId || null,
           licensePlate: body.licensePlate || null,
@@ -112,10 +140,20 @@ export async function POST(req: NextRequest) {
         include: { vehicle: true, source: true, operator: true, recipient: true },
       });
 
-      if (levelSourceId) {
-        await txClient.fuelSource.update({
-          where: { id: levelSourceId },
-          data: { currentLevel: isInbound ? { increment: liters } : { decrement: liters } },
+      if (levelSourceId && beforeSource && beforeSource.sourceType !== "EXTERNAL_STATION") {
+        const beforeLevel = Number(beforeSource.currentLevel);
+        const cap = beforeSource.capacityLiters != null ? Number(beforeSource.capacityLiters) : null;
+        const rawNext = isInbound ? beforeLevel + liters : beforeLevel - liters;
+        const next = Math.max(0, cap != null ? Math.min(cap, rawNext) : rawNext);
+        await txClient.fuelSource.update({ where: { id: levelSourceId }, data: { currentLevel: next } });
+      }
+
+      if (beforeVehicle) {
+        const beforeFuel = parseFuelLitersFromNotes(beforeVehicle.notes) ?? 0;
+        const nextFuel = Math.max(0, beforeFuel + liters);
+        await txClient.vehicle.update({
+          where: { id: beforeVehicle.id },
+          data: { notes: upsertFuelLitersInNotes(beforeVehicle.notes, nextFuel) },
         });
       }
 
@@ -136,6 +174,9 @@ export async function POST(req: NextRequest) {
 
       return transaction;
     });
+
+    cacheDeletePrefix(`lookup:${org.id}:`);
+    cacheDeletePrefix(`dashboard:${org.id}:`);
 
     return NextResponse.json(tx, { status: 201 });
   } catch (e) {
