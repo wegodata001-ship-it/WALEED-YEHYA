@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser, type AuthUser } from "./auth";
-import { isEmployeeRole, isManagerRole } from "./roles";
+import { canViewPayroll, isEmployeeRole, isManagerRole } from "./roles";
 
 export class ApiAuthError extends Error {
   constructor(
@@ -20,6 +20,13 @@ export async function requireAuthUser(): Promise<AuthUser> {
 export async function requireManager(): Promise<AuthUser> {
   const user = await requireAuthUser();
   if (!isManagerRole(user.role)) throw new ApiAuthError(403, "אין הרשאה");
+  return user;
+}
+
+/** Salary / payments / wage reports — OWNER (and system admins) only. */
+export async function requirePayrollAccess(): Promise<AuthUser> {
+  const user = await requireAuthUser();
+  if (!canViewPayroll(user.role)) throw new ApiAuthError(403, "אין הרשאה לנתוני שכר");
   return user;
 }
 

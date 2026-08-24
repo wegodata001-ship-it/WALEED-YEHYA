@@ -109,14 +109,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const org = await getDefaultOrg();
     const user = await requireManager();
+    const mode = new URL(req.url).searchParams.get("mode") || "archive";
 
-    const old = await prisma.vehicle.findUnique({ where: { id } });
+    const old = await prisma.vehicle.findFirst({ where: { id, organizationId: org.id } });
     if (!old) return NextResponse.json({ error: "לא נמצא" }, { status: 404 });
+
+    if (mode === "hard") {
+      await prisma.$transaction(async (tx) => {
+        await tx.tire.deleteMany({ where: { vehicleId: id } });
+        await tx.vehicleCompliance.deleteMany({ where: { vehicleId: id } });
+        await tx.serviceRecord.deleteMany({ where: { vehicleId: id } });
+        await tx.fuelRecipient.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
+        await tx.fuelTransaction.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
+        await tx.machineryWorkLog.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
+        await tx.machineryUnit.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
+        await tx.vehicle.delete({ where: { id } });
+      });
+      cacheDeletePrefix(`lookup:${org.id}:`);
+      cacheDeletePrefix(`dashboard:${org.id}:`);
+      return NextResponse.json({ success: true, mode: "hard" });
+    }
 
     await prisma.vehicle.update({
       where: { id },
@@ -134,11 +151,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       },
     });
 
-    // Ensure employees see updates immediately (lookup cache + dashboard cache).
     cacheDeletePrefix(`lookup:${org.id}:`);
     cacheDeletePrefix(`dashboard:${org.id}:`);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, mode: "archive" });
   } catch (e) {
     if (e instanceof ApiAuthError) return handleApiAuth(e);
     console.error(e);

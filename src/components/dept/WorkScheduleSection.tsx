@@ -34,19 +34,27 @@ type Lookup = {
 };
 
 type MasterData = {
-  customers: { id: string; name: string }[];
+  customers: {
+    id: string;
+    name: string;
+    settlements?: { id: string; name: string }[];
+  }[];
   settlements: { id: string; name: string }[];
-  plots: { id: string; name: string }[];
+  plots: { id: string; name: string; farmerId?: string | null; moshavId?: string | null }[];
   materials: { id: string | null; name: string }[];
+  customQuantityUnits?: { id: string; name: string }[];
 };
 
 const emptyForm = () => ({
   customerName: "",
+  customerId: "",
   settlement: "",
+  settlementId: "",
   plotName: "",
   material: "",
   plannedQuantity: "1",
   quantityUnitUi: "DUNAM",
+  customUnitLabel: "",
   vehiclePlate: "",
   machineryUnitId: "",
   assigneeId: "",
@@ -56,9 +64,9 @@ const emptyForm = () => ({
 });
 
 async function ensureMaster(
-  kind: "customer" | "settlement" | "plot" | "material",
+  kind: "customer" | "settlement" | "plot" | "material" | "quantity_unit",
   name: string,
-  extra?: { settlementName?: string }
+  extra?: { settlementName?: string; customerId?: string; customerName?: string; notes?: string }
 ): Promise<SelectOption | null> {
   const res = await fetch("/api/master-data", {
     method: "POST",
@@ -96,8 +104,11 @@ export function WorkScheduleSection() {
   const [msg, setMsg] = useState("");
   const [historyTask, setHistoryTask] = useState<FieldTaskRow | null>(null);
 
-  const loadMaster = useCallback(async (signal?: AbortSignal) => {
-    const res = await fetch("/api/master-data", { signal });
+  const loadMaster = useCallback(async (signal?: AbortSignal, customerId?: string, settlementId?: string) => {
+    const qs = new URLSearchParams();
+    if (customerId) qs.set("customerId", customerId);
+    if (settlementId) qs.set("settlementId", settlementId);
+    const res = await fetch(`/api/master-data${qs.toString() ? `?${qs}` : ""}`, { signal });
     const data = await res.json();
     if (res.ok) {
       setMaster({
@@ -105,6 +116,7 @@ export function WorkScheduleSection() {
         settlements: data.settlements || [],
         plots: data.plots || [],
         materials: data.materials || [],
+        customQuantityUnits: data.customQuantityUnits || [],
       });
     }
   }, []);
@@ -141,22 +153,38 @@ export function WorkScheduleSection() {
   useEffect(() => {
     if (!showForm) return;
     const ac = new AbortController();
-    loadMaster(ac.signal).catch(() => {});
+    loadMaster(ac.signal, form.customerId || undefined, form.settlementId || undefined).catch(() => {});
     return () => ac.abort();
-  }, [showForm, loadMaster]);
+  }, [showForm, loadMaster, form.customerId, form.settlementId]);
 
   const customerOpts: SelectOption[] = useMemo(
     () => master.customers.map((c) => ({ id: c.id, label: c.name })),
     [master.customers]
   );
-  const settlementOpts: SelectOption[] = useMemo(
-    () => master.settlements.map((s) => ({ id: s.id, label: s.name })),
-    [master.settlements]
+
+  const selectedCustomer = useMemo(
+    () => master.customers.find((c) => c.id === form.customerId || c.name === form.customerName) || null,
+    [master.customers, form.customerId, form.customerName]
   );
-  const plotOpts: SelectOption[] = useMemo(
-    () => master.plots.map((p) => ({ id: p.id, label: p.name })),
-    [master.plots]
-  );
+
+  const settlementOpts: SelectOption[] = useMemo(() => {
+    if (selectedCustomer?.settlements?.length) {
+      return selectedCustomer.settlements.map((s) => ({ id: s.id, label: s.name }));
+    }
+    // Before customer chosen — empty hierarchy (avoid showing all settlements of all customers)
+    if (form.customerName.trim()) return master.settlements.map((s) => ({ id: s.id, label: s.name }));
+    return [];
+  }, [selectedCustomer, master.settlements, form.customerName]);
+
+  const plotOpts: SelectOption[] = useMemo(() => {
+    let list = master.plots;
+    if (form.customerId) list = list.filter((p) => !p.farmerId || p.farmerId === form.customerId);
+    if (form.settlementId && !form.settlementId.startsWith("legacy:")) {
+      list = list.filter((p) => !p.moshavId || p.moshavId === form.settlementId);
+    }
+    return list.map((p) => ({ id: p.id, label: p.name }));
+  }, [master.plots, form.customerId, form.settlementId]);
+
   const materialOpts: SelectOption[] = useMemo(
     () => master.materials.map((m, i) => ({ id: m.id || `mat-${i}-${m.name}`, label: m.name })),
     [master.materials]
@@ -187,10 +215,14 @@ export function WorkScheduleSection() {
       })),
     [lookup.employees]
   );
-  const unitOpts: SelectOption[] = useMemo(
-    () => SCHEDULE_QUANTITY_UNITS.map((u) => ({ id: u.value, label: u.label })),
-    []
-  );
+  const unitOpts: SelectOption[] = useMemo(() => {
+    const base = SCHEDULE_QUANTITY_UNITS.map((u) => ({ id: u.value, label: u.label }));
+    const customs = (master.customQuantityUnits || []).map((u) => ({
+      id: `CUSTOM:${u.name}`,
+      label: u.name,
+    }));
+    return [...base, ...customs.filter((c) => !base.some((b) => b.label === c.label))];
+  }, [master.customQuantityUnits]);
 
   const customerFilterOptions = useMemo(() => {
     const names = new Set(master.customers.map((c) => c.name));
@@ -254,12 +286,33 @@ export function WorkScheduleSection() {
 
       await Promise.all([
         ensureMaster("customer", customerName, { settlementName: settlement || undefined }),
-        settlement ? ensureMaster("settlement", settlement) : Promise.resolve(null),
-        plotName ? ensureMaster("plot", plotName, { settlementName: settlement || undefined }) : Promise.resolve(null),
-        material ? ensureMaster("material", material) : Promise.resolve(null),
+        settlement
+          ? ensureMaster("settlement", settlement, { customerId: form.customerId || undefined })
+          : Promise.resolve(null),
+        plotName
+          ? ensureMaster("plot", plotName, {
+              settlementName: settlement || undefined,
+              customerId: form.customerId || undefined,
+              customerName,
+            })
+          : Promise.resolve(null),
+        material && material !== "ללא חומר" ? ensureMaster("material", material) : Promise.resolve(null),
+        form.quantityUnitUi === "OTHER" && form.customUnitLabel.trim()
+          ? ensureMaster("quantity_unit", form.customUnitLabel.trim())
+          : form.quantityUnitUi.startsWith("CUSTOM:")
+            ? ensureMaster("quantity_unit", form.quantityUnitUi.slice(7))
+            : Promise.resolve(null),
       ]);
 
       const plate = form.vehiclePlate || "";
+      let quantityUnitUi = form.quantityUnitUi;
+      let unitLabel: string | undefined;
+      if (quantityUnitUi === "OTHER" && form.customUnitLabel.trim()) {
+        unitLabel = form.customUnitLabel.trim();
+      } else if (quantityUnitUi.startsWith("CUSTOM:")) {
+        unitLabel = quantityUnitUi.slice(7);
+        quantityUnitUi = "OTHER";
+      }
 
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -268,9 +321,10 @@ export function WorkScheduleSection() {
           customerName,
           settlement: settlement || null,
           plotName: plotName || null,
-          material: material || null,
+          material: material === "ללא חומר" ? null : material || null,
           plannedQuantity: Number(form.plannedQuantity || 1),
-          quantityUnitUi: form.quantityUnitUi,
+          quantityUnitUi,
+          unitLabel,
           vehiclePlate: plate || null,
           machineryUnitId: form.machineryUnitId || null,
           assigneeId: form.assigneeId,
@@ -612,12 +666,24 @@ export function WorkScheduleSection() {
               value={form.customerName}
               options={customerOpts}
               placeholder="חפש לקוח או הוסף חדש"
-              onChange={(label) => setForm((f) => ({ ...f, customerName: label }))}
+              onChange={(label, opt) =>
+                setForm((f) => ({
+                  ...f,
+                  customerName: label,
+                  customerId: opt?.id || "",
+                  settlement: "",
+                  settlementId: "",
+                  plotName: "",
+                }))
+              }
               onCreate={async (name) => {
                 const created = await ensureMaster("customer", name, {
                   settlementName: form.settlement || undefined,
                 });
-                if (created) addToMasterLocal("customers", created.id, created.label);
+                if (created) {
+                  addToMasterLocal("customers", created.id, created.label);
+                  setForm((f) => ({ ...f, customerId: created.id, customerName: created.label }));
+                }
                 return created;
               }}
             />
@@ -626,10 +692,19 @@ export function WorkScheduleSection() {
               label="ישוב"
               value={form.settlement}
               options={settlementOpts}
-              placeholder="חפש ישוב או הוסף חדש"
-              onChange={(label) => setForm((f) => ({ ...f, settlement: label }))}
+              placeholder={form.customerName ? "ישובים של הלקוח · או הוסף חדש" : "בחר לקוח קודם"}
+              onChange={(label, opt) =>
+                setForm((f) => ({
+                  ...f,
+                  settlement: label,
+                  settlementId: opt?.id || "",
+                  plotName: "",
+                }))
+              }
               onCreate={async (name) => {
-                const created = await ensureMaster("settlement", name);
+                const created = await ensureMaster("settlement", name, {
+                  customerId: form.customerId || undefined,
+                });
                 if (created) addToMasterLocal("settlements", created.id, created.label);
                 return created;
               }}
@@ -639,11 +714,13 @@ export function WorkScheduleSection() {
               label="חלקה"
               value={form.plotName}
               options={plotOpts}
-              placeholder="חפש חלקה או הוסף חדשה"
+              placeholder={form.settlement ? "חלקות של הישוב · או ➕ חלקה חדשה" : "בחר ישוב קודם"}
               onChange={(label) => setForm((f) => ({ ...f, plotName: label }))}
               onCreate={async (name) => {
                 const created = await ensureMaster("plot", name, {
                   settlementName: form.settlement || undefined,
+                  customerId: form.customerId || undefined,
+                  customerName: form.customerName || undefined,
                 });
                 if (created) addToMasterLocal("plots", created.id, created.label);
                 return created;
@@ -654,9 +731,13 @@ export function WorkScheduleSection() {
               label="חומר"
               value={form.material}
               options={materialOpts}
-              placeholder="חפש חומר או הוסף חדש"
+              placeholder="ללא חומר · או בחר / הוסף"
               onChange={(label) => setForm((f) => ({ ...f, material: label }))}
               onCreate={async (name) => {
+                if (name === "ללא חומר") {
+                  setForm((f) => ({ ...f, material: "ללא חומר" }));
+                  return { id: "none", label: "ללא חומר" };
+                }
                 const created = await ensureMaster("material", name);
                 if (created) {
                   setMaster((prev) => {
@@ -687,18 +768,48 @@ export function WorkScheduleSection() {
               </div>
               <SearchableSelect
                 label="יחידת מידה"
-                value={SCHEDULE_QUANTITY_UNITS.find((u) => u.value === form.quantityUnitUi)?.label || form.quantityUnitUi}
+                value={
+                  form.quantityUnitUi === "OTHER" && form.customUnitLabel
+                    ? form.customUnitLabel
+                    : SCHEDULE_QUANTITY_UNITS.find((u) => u.value === form.quantityUnitUi)?.label ||
+                      (form.quantityUnitUi.startsWith("CUSTOM:")
+                        ? form.quantityUnitUi.slice(7)
+                        : form.quantityUnitUi)
+                }
                 options={unitOpts}
                 allowCreate={false}
                 onChange={(label, opt) => {
                   const byLabel = SCHEDULE_QUANTITY_UNITS.find((u) => u.label === label);
+                  const id = opt?.id || byLabel?.value || "OTHER";
                   setForm((f) => ({
                     ...f,
-                    quantityUnitUi: opt?.id || byLabel?.value || f.quantityUnitUi,
+                    quantityUnitUi: id,
+                    customUnitLabel: id === "OTHER" ? f.customUnitLabel : "",
                   }));
                 }}
               />
             </div>
+            {(form.quantityUnitUi === "OTHER" || form.quantityUnitUi.startsWith("CUSTOM:")) && (
+              <div>
+                <label className="block text-xs font-bold mb-1">שם יחידה (אחר)</label>
+                <input
+                  value={
+                    form.quantityUnitUi.startsWith("CUSTOM:")
+                      ? form.quantityUnitUi.slice(7)
+                      : form.customUnitLabel
+                  }
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      quantityUnitUi: "OTHER",
+                      customUnitLabel: e.target.value,
+                    })
+                  }
+                  className="field-input"
+                  placeholder="לדוגמה: שקית / פלטה"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">

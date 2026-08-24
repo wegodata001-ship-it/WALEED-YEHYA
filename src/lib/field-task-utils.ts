@@ -1,6 +1,7 @@
 /** Helpers for FieldTask metadata without schema changes. */
 
 import type { StoredMediaRef } from "./storage/types";
+import { NO_MATERIAL_LABEL } from "./constants";
 
 export type TaskProgressReport = {
   at: string;
@@ -56,7 +57,9 @@ export function encodeTaskDescription(params: {
   const text = params.notes?.trim() || "";
 
   if (plate) parts.push(`${VEHICLE_PREFIX}${plate}${TAG_SUFFIX}`);
-  if (material) parts.push(`${MATERIAL_PREFIX}${material}${TAG_SUFFIX}`);
+  if (material && material !== NO_MATERIAL_LABEL) {
+    parts.push(`${MATERIAL_PREFIX}${material}${TAG_SUFFIX}`);
+  }
   if (unitLabel) parts.push(`${UNIT_LABEL_PREFIX}${unitLabel}${TAG_SUFFIX}`);
   if (text) parts.push(text);
 

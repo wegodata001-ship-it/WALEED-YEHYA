@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Tractor,
   CircleDot,
@@ -12,16 +13,21 @@ import {
   Users,
   UserRound,
   CalendarDays,
+  HardHat,
 } from "lucide-react";
+import { canViewPayroll } from "@/lib/roles";
 
-const NAV = [
+type NavItem = { href: string; label: string; icon: typeof Tractor; payrollOnly?: boolean };
+
+const NAV: NavItem[] = [
   { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
   { href: "/schedule", label: "סידור עבודה", icon: CalendarDays },
   { href: "/operations", label: "תפעול", icon: Briefcase },
-  { href: "/finance", label: "כספים", icon: Wallet },
+  { href: "/finance", label: "כספים", icon: Wallet, payrollOnly: true },
   { href: "/fleet", label: "כלי רכב", icon: CircleDot },
   { href: "/customers", label: "לקוחות", icon: UserRound },
   { href: "/employees", label: "עובדים", icon: Users },
+  { href: "/subcontractors", label: "קבלנים", icon: HardHat },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -42,12 +48,30 @@ function isActive(pathname: string, href: string) {
   if (href === "/fleet") {
     return pathname.startsWith("/fleet") || pathname.startsWith("/machinery");
   }
+  if (href === "/subcontractors") {
+    return pathname.startsWith("/subcontractors");
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function AppToolbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((me) => {
+        if (me?.role) setRole(String(me.role));
+      })
+      .catch(() => {});
+  }, []);
+
+  const items = useMemo(() => {
+    if (!role) return NAV.filter((n) => !n.payrollOnly);
+    return NAV.filter((n) => !n.payrollOnly || canViewPayroll(role));
+  }, [role]);
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -69,7 +93,7 @@ export function AppToolbar() {
         </Link>
 
         <nav className="app-tabs" aria-label="מחלקות המערכת">
-          {NAV.map((item) => {
+          {items.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link

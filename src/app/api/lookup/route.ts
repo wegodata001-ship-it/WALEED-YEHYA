@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         prisma.plot.findMany({
           where: { organizationId: org.id, isActive: true },
           orderBy: { name: "asc" },
-          select: { id: true, name: true, nameHe: true },
+          select: { id: true, name: true, nameHe: true, farmerId: true, moshavId: true },
         }),
         prisma.vehicle.findMany({
           where: { organizationId: org.id, isActive: true },
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
         prisma.farmer.findMany({
           where: { organizationId: org.id, isActive: true },
           orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, moshavId: true },
         }),
         prisma.moshav.findMany({
           where: { organizationId: org.id, isActive: true },

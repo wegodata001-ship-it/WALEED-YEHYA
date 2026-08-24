@@ -9,7 +9,8 @@ import {
   BALE_LABELS,
   CHOPPING_LABELS,
   MACHINERY_UNIT_LABELS,
-  QUANTITY_UNIT_LABELS,
+  SCHEDULE_QUANTITY_UNITS,
+  parseScheduleQuantityUnit,
 } from "@/lib/constants";
 import { formatMachineryWhatsApp } from "@/lib/whatsapp";
 import { addToOfflineQueue } from "@/lib/offline-sync";
@@ -48,6 +49,7 @@ export default function MobileMachineryPage() {
     plotName: "",
     materialType: "",
     quantityUnit: "DUNAM",
+    customUnitLabel: "",
     acresWorked: "",
     fuelUsedLiters: "",
     baleCategory: "",
@@ -118,19 +120,30 @@ export default function MobileMachineryPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const parsed = parseScheduleQuantityUnit(form.quantityUnit);
+    const qty = {
+      quantityUnit: parsed.quantityUnit,
+      unitLabel:
+        form.quantityUnit === "OTHER" && form.customUnitLabel.trim()
+          ? form.customUnitLabel.trim()
+          : parsed.unitLabel,
+    };
     const payload = {
       machineryUnitId: form.machineryUnitId,
       settlement: form.settlement,
       customerName: form.customerName,
       plotName: form.plotName || null,
       materialType: form.materialType || null,
-      quantityUnit: form.quantityUnit,
+      quantityUnit: qty.quantityUnit,
       acresWorked: Number(form.acresWorked),
       fuelUsedLiters: form.fuelUsedLiters ? Number(form.fuelUsedLiters) : null,
       baleCategory: form.baleCategory || null,
       baleCount: form.baleCount ? Number(form.baleCount) : null,
       choppingMechanism: form.choppingMechanism,
-      notes: form.notes || null,
+      notes:
+        qty.unitLabel
+          ? `${form.notes || ""}${form.notes ? "\n" : ""}__unitLabel:${qty.unitLabel}__`
+          : form.notes || null,
       photoUrl,
       workDate: new Date().toISOString(),
     };
@@ -266,15 +279,28 @@ export default function MobileMachineryPage() {
           <Field label="יחידה">
             <select
               value={form.quantityUnit}
-              onChange={(e) => setForm({ ...form, quantityUnit: e.target.value })}
+              onChange={(e) => setForm({ ...form, quantityUnit: e.target.value, customUnitLabel: "" })}
               className="field-input"
             >
-              {Object.entries(QUANTITY_UNIT_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {SCHEDULE_QUANTITY_UNITS.map((u) => (
+                <option key={u.value} value={u.value}>
+                  {u.label}
+                </option>
               ))}
             </select>
           </Field>
         </div>
+
+        {form.quantityUnit === "OTHER" && (
+          <Field label="שם יחידה (אחר)">
+            <input
+              value={form.customUnitLabel}
+              onChange={(e) => setForm({ ...form, customUnitLabel: e.target.value })}
+              className="field-input"
+              placeholder="לדוגמה: שקית"
+            />
+          </Field>
+        )}
 
         <Field label="צריכת דלק (ליטר)">
           <input

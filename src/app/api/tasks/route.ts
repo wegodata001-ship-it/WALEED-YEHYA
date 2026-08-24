@@ -151,25 +151,42 @@ export async function POST(req: NextRequest) {
     if (!body.customerName?.trim()) {
       return NextResponse.json({ error: "חובה למלא לקוח" }, { status: 400 });
     }
+    if (!body.assigneeId) {
+      return NextResponse.json({ error: "חובה לבחור עובד" }, { status: 400 });
+    }
 
-    const qtyParsed = body.quantityUnitUi
+    const qtyParsedRaw = body.quantityUnitUi
       ? parseScheduleQuantityUnit(body.quantityUnitUi)
-      : { quantityUnit: body.quantityUnit || "DUNAM", unitLabel: body.unitLabel };
+      : { quantityUnit: body.quantityUnit || "DUNAM", unitLabel: body.unitLabel as string | undefined };
+    const qtyParsed = {
+      quantityUnit: qtyParsedRaw.quantityUnit,
+      unitLabel:
+        body.unitLabel && String(body.unitLabel).trim()
+          ? String(body.unitLabel).trim()
+          : qtyParsedRaw.unitLabel,
+    };
+    if (body.unitLabel && String(body.unitLabel).trim() && (!body.quantityUnitUi || body.quantityUnitUi === "OTHER")) {
+      qtyParsed.quantityUnit = "OTHER";
+    }
+
+    const materialRaw = body.material != null ? String(body.material).trim() : "";
+    const material =
+      !materialRaw || materialRaw === "ללא חומר" ? null : materialRaw;
 
     const task = await prisma.fieldTask.create({
       data: {
         organizationId: org.id,
-        assigneeId: body.assigneeId,
+        assigneeId: String(body.assigneeId),
         workDate,
         machineryUnitId: body.machineryUnitId || null,
         settlement: body.settlement || body.address || null,
         customerName: body.customerName.trim(),
         plotName: body.plotName || body.plot || body.workType || null,
-        plannedQuantity: Number(body.plannedQuantity ?? 1),
-        quantityUnit: qtyParsed.quantityUnit || "DUNAM",
+        plannedQuantity: Number(body.plannedQuantity ?? body.quantity ?? 1),
+        quantityUnit: (qtyParsed.quantityUnit || "DUNAM") as "DUNAM" | "HOUR" | "BALE" | "ACRE" | "OTHER",
         taskDescription: encodeTaskDescription({
           vehiclePlate: body.vehiclePlate,
-          material: body.material,
+          material,
           unitLabel: qtyParsed.unitLabel,
           notes: body.taskDescription || body.notes || null,
         }),

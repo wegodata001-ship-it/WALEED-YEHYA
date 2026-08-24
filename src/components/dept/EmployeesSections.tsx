@@ -31,6 +31,8 @@ export function EmployeesRegisterSection({
   onCloseModal,
   onSave,
   onDelete,
+  onHardDelete,
+  canViewSalary = false,
   saving,
   msg,
 }: {
@@ -46,13 +48,17 @@ export function EmployeesRegisterSection({
   onCloseModal: () => void;
   onSave: (e: React.FormEvent) => void;
   onDelete: (id: string) => void;
+  onHardDelete?: (id: string) => void;
+  canViewSalary?: boolean;
   saving?: boolean;
   msg?: string;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-sm font-bold text-primary-dark">רישום עובדים ושכר</h3>
+        <h3 className="text-sm font-bold text-primary-dark">
+          {canViewSalary ? "רישום עובדים ושכר" : "רישום עובדים"}
+        </h3>
         <button
           type="button"
           onClick={onOpenAdd}
@@ -70,13 +76,17 @@ export function EmployeesRegisterSection({
             subtitle={e.position || "עובד"}
             fields={[
               ...(e.phone ? [{ label: "טלפון", value: e.phone }] : []),
-              {
-                label: "שכר",
-                value:
-                  e.salaryType === "MONTHLY"
-                    ? `חודשי ₪${Number(e.monthlySalary || 0).toLocaleString("he-IL")}`
-                    : `שעתי ₪${Number(e.hourlyRate || 0)}`,
-              },
+              ...(canViewSalary
+                ? [
+                    {
+                      label: "שכר",
+                      value:
+                        e.salaryType === "MONTHLY"
+                          ? `חודשי ₪${Number(e.monthlySalary || 0).toLocaleString("he-IL")}`
+                          : `שעתי ₪${Number(e.hourlyRate || 0)}`,
+                    },
+                  ]
+                : []),
               ...(activeShifts?.[e.id]
                 ? [
                     { label: "סטטוס משמרת", value: "🟢 במשמרת" },
@@ -89,7 +99,7 @@ export function EmployeesRegisterSection({
                     },
                   ]
                 : [{ label: "סטטוס משמרת", value: "⚪ לא במשמרת" }]),
-              { label: "סטטוס", value: e.isActive === false ? "מושבת" : "פעיל" },
+              { label: "סטטוס", value: e.isActive === false ? "ארכיון" : "פעיל" },
             ]}
             onEdit={() => onOpenEdit(e)}
             className={e.isActive === false ? "opacity-60" : ""}
@@ -113,13 +123,23 @@ export function EmployeesRegisterSection({
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`להשבית את ${e.firstName} ${e.lastName}?`)) onDelete(e.id);
+                      if (confirm(`להעביר לארכיון את ${e.firstName} ${e.lastName}?`)) onDelete(e.id);
                     }}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-danger"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-700"
                   >
-                    <Trash2 className="h-3 w-3" /> מחיקה
+                    ארכיון
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onHardDelete) onHardDelete(e.id);
+                    else if (confirm(`למחוק לצמיתות את ${e.firstName} ${e.lastName}?`)) onDelete(e.id);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-danger"
+                >
+                  <Trash2 className="h-3 w-3" /> מחיקה
+                </button>
               </div>
             }
           />
@@ -175,28 +195,32 @@ export function EmployeesRegisterSection({
                 <option value="FIELD_OPERATOR">מפעיל שטח</option>
                 <option value="OFFICE_MANAGER">משרד</option>
               </select>
-              <select
-                value={form.salaryType}
-                onChange={(ev) => setForm({ ...form, salaryType: ev.target.value })}
-                className="field-input"
-              >
-                <option value="HOURLY">שכר שעתי</option>
-                <option value="MONTHLY">שכר חודשי</option>
-              </select>
-              {form.salaryType === "HOURLY" ? (
-                <input
-                  placeholder="שכר לשעה"
-                  value={form.hourlyRate}
-                  onChange={(ev) => setForm({ ...form, hourlyRate: ev.target.value })}
-                  className="field-input"
-                />
-              ) : (
-                <input
-                  placeholder="שכר חודשי"
-                  value={form.monthlySalary}
-                  onChange={(ev) => setForm({ ...form, monthlySalary: ev.target.value })}
-                  className="field-input"
-                />
+              {canViewSalary && (
+                <>
+                  <select
+                    value={form.salaryType}
+                    onChange={(ev) => setForm({ ...form, salaryType: ev.target.value })}
+                    className="field-input"
+                  >
+                    <option value="HOURLY">שכר שעתי</option>
+                    <option value="MONTHLY">שכר חודשי</option>
+                  </select>
+                  {form.salaryType === "HOURLY" ? (
+                    <input
+                      placeholder="שכר לשעה"
+                      value={form.hourlyRate}
+                      onChange={(ev) => setForm({ ...form, hourlyRate: ev.target.value })}
+                      className="field-input"
+                    />
+                  ) : (
+                    <input
+                      placeholder="שכר חודשי"
+                      value={form.monthlySalary}
+                      onChange={(ev) => setForm({ ...form, monthlySalary: ev.target.value })}
+                      className="field-input"
+                    />
+                  )}
+                </>
               )}
               <input
                 placeholder={modal === "edit" ? "סיסמה חדשה (אופציונלי)" : "סיסמה"}

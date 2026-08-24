@@ -20,6 +20,7 @@ import {
 import { WorkCardDetail } from "@/components/WorkCardDetail";
 import { SmallLoader } from "@/components/ui/SmallLoader";
 import { SYNC_LABELS } from "@/lib/constants";
+import { canViewPayroll } from "@/lib/roles";
 
 const MONTHS = [
   "ינואר",
@@ -100,9 +101,19 @@ export function DashboardClient() {
   const [fuelLevels, setFuelLevels] = useState<{ name: string; current: number; capacity: number | null }[]>([]);
   const [lowFuelVehicles, setLowFuelVehicles] = useState<{ id: string; licensePlate: string; name: string; fuelLiters: number }[]>([]);
   const [lowFuelMachines, setLowFuelMachines] = useState<{ id: string; name: string; licensePlate: string | null; fuelLiters: number }[]>([]);
+  const [canPayroll, setCanPayroll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeLoading, setActiveLoading] = useState(true);
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((me) => {
+        if (me?.role) setCanPayroll(canViewPayroll(String(me.role)));
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -211,13 +222,17 @@ export function DashboardClient() {
           ? `${stats.pendingApprovals} ממתינים לאישור`
           : `₪${stats.totalFuelCost.toLocaleString("he-IL")} דלק`,
     },
-    {
-      href: "/finance",
-      title: "כספים",
-      icon: Wallet,
-      primary: `${stats.ledgerMovements} תנועות`,
-      secondary: "כרטסות · תשלומים · תקבולים",
-    },
+    ...(canPayroll
+      ? [
+          {
+            href: "/finance",
+            title: "כספים",
+            icon: Wallet,
+            primary: `${stats.ledgerMovements} תנועות`,
+            secondary: "כרטסות · תשלומים · תקבולים",
+          } as DeptCard,
+        ]
+      : []),
     {
       href: "/fleet",
       title: "כלי רכב",
@@ -239,6 +254,13 @@ export function DashboardClient() {
       icon: Users,
       primary: `${stats.employeesCount} עובדים`,
       secondary: `${stats.attendanceCount} נוכחו בטווח`,
+    },
+    {
+      href: "/subcontractors",
+      title: "קבלנים",
+      icon: Briefcase,
+      primary: "קבלני משנה",
+      secondary: "רשימה · כרטסת · ארכיון",
     },
   ];
 

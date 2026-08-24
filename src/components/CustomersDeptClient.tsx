@@ -17,6 +17,9 @@ const emptyFarmerForm = () => ({
   firstName: "",
   lastName: "",
   phone: "",
+  phone2: "",
+  contactPerson: "",
+  address: "",
   moshavName: "",
   notes: "",
 });
@@ -101,8 +104,11 @@ export function CustomersDeptClient() {
       firstName: f.firstName,
       lastName: f.lastName,
       phone: f.phone || "",
+      phone2: f.phone2 || "",
+      contactPerson: f.contactPerson || "",
+      address: f.address || "",
       moshavName: f.moshav?.nameHe || f.moshav?.name || "",
-      notes: f.notes || "",
+      notes: f.displayNotes || f.notes || "",
     });
     setMsg("");
     setModal("edit");

@@ -124,7 +124,19 @@ export type FarmerRow = {
   firstName: string;
   lastName: string;
   phone: string | null;
+  phone2?: string | null;
+  contactPerson?: string | null;
+  address?: string | null;
   notes: string | null;
+  displayNotes?: string | null;
   isActive: boolean;
   moshav: { id: string; name: string; nameHe: string | null } | null;
+  linkedMoshavIds?: string[];
+  plots?: {
+    id: string;
+    name: string;
+    nameHe: string | null;
+    notes: string | null;
+    moshav: { id: string; name: string; nameHe: string | null } | null;
+  }[];
 };

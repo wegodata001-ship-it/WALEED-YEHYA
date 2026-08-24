@@ -33,7 +33,13 @@ type LookupVehicle = {
 
 type Lookup = {
   employees: { id: string; firstName: string; lastName: string }[];
-  fuelSources: { id: string; name: string; sourceType: string; currentLevel: number }[];
+  fuelSources: {
+    id: string;
+    name: string;
+    sourceType: string;
+    currentLevel: number;
+    capacityLiters?: number | null;
+  }[];
   fuelRecipients: FuelRecipient[];
   vehicles: LookupVehicle[];
 };
@@ -103,6 +109,13 @@ export default function MobileFuelPage() {
   }, [lookup?.vehicles, mode]);
 
   const selectedVehicle = filteredVehicles.find((v) => v.id === form.vehicleId);
+  const selectedSource = (lookup?.fuelSources || []).find(
+    (s) => s.id === (mode === "tank_fill" ? form.tankSourceId : form.sourceId)
+  );
+  const sourcePct =
+    selectedSource?.capacityLiters != null && Number(selectedSource.capacityLiters) > 0
+      ? Math.round((Number(selectedSource.currentLevel) / Number(selectedSource.capacityLiters)) * 100)
+      : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +158,11 @@ export default function MobileFuelPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (res.ok) setSaved(data);
+      if (res.ok) {
+        setSaved(data);
+        // Refresh tank/vehicle levels immediately for next report
+        loadLookup().catch(() => {});
+      }
     } finally {
       setLoading(false);
     }
@@ -284,6 +301,46 @@ export default function MobileFuelPage() {
               </select>
             </Field>
           </>
+        )}
+
+        {selectedSource && (
+          <div
+            className={`rounded-xl border px-3 py-3 ${
+              sourcePct != null && sourcePct < 20 ? "border-danger/50 bg-red-50" : "border-border bg-card"
+            }`}
+          >
+            <p className="text-sm font-extrabold text-primary-dark">{selectedSource.name}</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <p className="text-muted">
+                כמות נוכחית:{" "}
+                <span className="font-bold text-foreground tabular-nums">
+                  {Number(selectedSource.currentLevel).toLocaleString("he-IL")} ל׳
+                </span>
+              </p>
+              <p className="text-muted">
+                קיבולת:{" "}
+                <span className="font-bold text-foreground tabular-nums">
+                  {selectedSource.capacityLiters != null
+                    ? `${Number(selectedSource.capacityLiters).toLocaleString("he-IL")} ל׳`
+                    : "—"}
+                </span>
+              </p>
+            </div>
+            {sourcePct != null && (
+              <div className="mt-2">
+                <div className="flex justify-between text-xs text-muted mb-1">
+                  <span>יתרה</span>
+                  <span className={sourcePct < 20 ? "font-bold text-danger" : "font-bold"}>{sourcePct}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted/40 overflow-hidden">
+                  <div
+                    className={`h-full ${sourcePct < 20 ? "bg-danger" : "bg-primary"}`}
+                    style={{ width: `${Math.max(0, Math.min(100, sourcePct))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         <PhotoCapture

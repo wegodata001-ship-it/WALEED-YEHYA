@@ -11,6 +11,7 @@ import {
 } from "@/components/dept/EmployeesSections";
 import type { DayRow, Employee } from "@/components/dept/types";
 import { dateRangeQuery, defaultDateRange, type DateRangeState } from "@/lib/dateRange";
+import { canViewPayroll } from "@/lib/roles";
 
 const TABS = [
   { id: "register", label: "רישום ועריכה" },
@@ -35,6 +36,7 @@ export function EmployeesDeptClient() {
   const [activeShifts, setActiveShifts] = useState<Record<string, string>>({});
   const [days, setDays] = useState<DayRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [canViewSalary, setCanViewSalary] = useState(false);
   const [pendingAttendance, setPendingAttendance] = useState<
     { id: string; employee: { firstName: string; lastName: string }; correctionNote: string | null; workDate: string; photoUrl?: string | null }[]
   >([]);
@@ -56,6 +58,15 @@ export function EmployeesDeptClient() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [empForm, setEmpForm] = useState(emptyEmployeeForm);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((me) => {
+        if (me?.role) setCanViewSalary(canViewPayroll(String(me.role)));
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -248,11 +259,18 @@ export function EmployeesDeptClient() {
     }
   };
 
-  const deleteEmployee = async (id: string) => {
-    const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
+  const archiveEmployee = async (id: string) => {
+    const res = await fetch(`/api/employees/${id}?mode=archive`, { method: "DELETE" });
     if (!res.ok) return;
     const data = await res.json();
     setEmployees((prev) => prev.map((x) => (x.id === id ? normalizeEmployee(data) : x)));
+  };
+
+  const hardDeleteEmployee = async (id: string) => {
+    if (!confirm("מחיקה לצמיתות של העובד וכל הרשומות הקשורות?")) return;
+    const res = await fetch(`/api/employees/${id}?mode=hard`, { method: "DELETE" });
+    if (!res.ok) return;
+    setEmployees((prev) => prev.filter((x) => x.id !== id));
   };
 
   const approveAttendance = async (id: string) => {
@@ -313,7 +331,9 @@ export function EmployeesDeptClient() {
           onOpenView={openView}
           onCloseModal={closeModal}
           onSave={saveEmployee}
-          onDelete={deleteEmployee}
+          onDelete={archiveEmployee}
+          onHardDelete={hardDeleteEmployee}
+          canViewSalary={canViewSalary}
           saving={saving}
           msg={msg}
         />

@@ -105,13 +105,8 @@ const vehicleFields = [
     required: true,
     options: Object.entries(VEHICLE_OWNERSHIP_LABELS).map(([value, label]) => ({ value, label })),
   },
-  {
-    key: "vehicleType",
-    label: "סוג כלי",
-    type: "select" as const,
-    required: true,
-    options: Object.entries(VEHICLE_TYPE_LABELS).map(([value, label]) => ({ value, label })),
-  },
+  { key: "vehicleType", label: "סוג כלי", type: "select" as const, required: true, options: Object.entries(VEHICLE_TYPE_LABELS).map(([value, label]) => ({ value, label })) },
+  { key: "customVehicleType", label: "שם סוג חדש (כשנבחר אחר)", },
   { key: "model", label: "דגם", required: true },
   { key: "make", label: "יצרן" },
   { key: "year", label: "שנת ייצור", type: "number" as const },
@@ -332,9 +327,15 @@ export function FleetPageClient({
     setAddKind(null);
   };
 
-  const deleteVehicle = async (id: string) => {
-    await fetch(`/api/vehicles/${id}`, { method: "DELETE" });
+  const deleteVehicle = async (id: string, mode: "archive" | "hard" = "archive") => {
+    if (mode === "hard" && !confirm("מחיקה לצמיתות של כלי הרכב?")) return;
+    const res = await fetch(`/api/vehicles/${id}?mode=${mode}`, { method: "DELETE" });
+    if (!res.ok) return;
     setDeleteId(null);
+    if (mode === "hard") {
+      setVehicles((prev) => prev.filter((v) => v.id !== id));
+      return;
+    }
     setVehicles((prev) =>
       prev
         .map((v) => (v.id === id ? { ...v, isActive: false, status: "RETIRED" } : v))
@@ -868,18 +869,25 @@ export function FleetPageClient({
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteId(null)} />
-          <div className="relative bg-card rounded-2xl border p-6 max-w-sm w-full card-shadow">
-            <h3 className="font-bold text-lg mb-2">מחיקת כלי רכב?</h3>
-            <p className="text-sm text-muted mb-4">הכלי יסומן כלא פעיל. ניתן לשחזר בעריכה.</p>
-            <div className="flex gap-2">
+          <div className="relative bg-card rounded-2xl border p-6 max-w-sm w-full card-shadow space-y-3">
+            <h3 className="font-bold text-lg">הסרת כלי רכב</h3>
+            <p className="text-sm text-muted">ארכיון — יישמר בהיסטוריה ולא יופיע בבחירה. מחיקה — לצמיתות.</p>
+            <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => deleteVehicle(deleteId)}
-                className="flex-1 bg-danger text-white rounded-xl py-2 font-semibold"
+                onClick={() => deleteVehicle(deleteId, "archive")}
+                className="w-full bg-amber-600 text-white rounded-xl py-2 font-semibold"
               >
-                מחק
+                ארכיון
               </button>
-              <button type="button" onClick={() => setDeleteId(null)} className="flex-1 border rounded-xl py-2">
+              <button
+                type="button"
+                onClick={() => deleteVehicle(deleteId, "hard")}
+                className="w-full bg-danger text-white rounded-xl py-2 font-semibold"
+              >
+                מחיקה לצמיתות
+              </button>
+              <button type="button" onClick={() => setDeleteId(null)} className="w-full border rounded-xl py-2">
                 ביטול
               </button>
             </div>

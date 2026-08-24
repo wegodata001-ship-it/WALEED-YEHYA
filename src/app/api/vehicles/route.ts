@@ -4,7 +4,9 @@ import { getDefaultOrg } from "@/lib/org";
 import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
 import { encodeOwnershipInNotes, withOwnershipField } from "@/lib/vehicle-ownership";
 import { upsertFuelLitersInNotes } from "@/lib/vehicle-fuel";
+import { upsertVehicleTypeLabelInNotes } from "@/lib/custom-labels";
 import { cacheDeletePrefix } from "@/lib/ttl-cache";
+import { VehicleType } from "@prisma/client";
 
 function parseDate(v: unknown) {
   if (!v || v === "") return null;
@@ -47,11 +49,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "חובה לבחור סוג בעלות (רכב חברה / רכב קבלן)" }, { status: 400 });
     }
 
+    const vehicleType = (body.vehicleType as VehicleType) || VehicleType.TRACTOR;
+    const customTypeLabel =
+      vehicleType === "OTHER" && body.customVehicleType
+        ? String(body.customVehicleType).trim()
+        : body.vehicleTypeLabel
+          ? String(body.vehicleTypeLabel).trim()
+          : null;
+
+    if (customTypeLabel) {
+      const sku = `CUSTOM_VEHICLE_TYPE:${customTypeLabel}`.slice(0, 64);
+      const existingType = await prisma.inventoryItem.findFirst({
+        where: {
+          organizationId: org.id,
+          category: "CUSTOM_VEHICLE_TYPE",
+          OR: [{ sku }, { name: { equals: customTypeLabel, mode: "insensitive" } }],
+        },
+      });
+      if (!existingType) {
+        await prisma.inventoryItem.create({
+          data: {
+            organizationId: org.id,
+            sku,
+            name: customTypeLabel,
+            nameHe: customTypeLabel,
+            category: "CUSTOM_VEHICLE_TYPE",
+            unit: "UNIT",
+            isActive: true,
+          },
+        });
+      } else if (!existingType.isActive) {
+        await prisma.inventoryItem.update({ where: { id: existingType.id }, data: { isActive: true } });
+      }
+    }
+
     const vehicle = await prisma.vehicle.create({
       data: {
         organizationId: org.id,
         licensePlate: body.licensePlate,
-        vehicleType: body.vehicleType,
+        vehicleType,
         status: body.status || "ACTIVE",
         make: body.make || null,
         model: body.model || null,
@@ -68,9 +104,12 @@ export async function POST(req: NextRequest) {
         windshieldInsurance: parseNum(body.windshieldInsurance),
         registeredTo: body.registeredTo || null,
         agentPhone: body.agentPhone || null,
-        notes: upsertFuelLitersInNotes(
-          encodeOwnershipInNotes(body.ownership, body.notes || null),
-          body.fuelLiters !== undefined && body.fuelLiters !== "" ? Number(body.fuelLiters) : null
+        notes: upsertVehicleTypeLabelInNotes(
+          upsertFuelLitersInNotes(
+            encodeOwnershipInNotes(body.ownership, body.notes || null),
+            body.fuelLiters !== undefined && body.fuelLiters !== "" ? Number(body.fuelLiters) : null
+          ),
+          customTypeLabel
         ),
         isActive: body.isActive !== false,
       },

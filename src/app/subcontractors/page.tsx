@@ -1,10 +1,7 @@
-import ModulePlaceholder from "@/components/ModulePlaceholder";
+import { SubcontractorsPageClient } from "@/components/SubcontractorsPageClient";
+
+export const dynamic = "force-dynamic";
 
 export default function SubcontractorsPage() {
-  return (
-    <ModulePlaceholder
-      title="קבלני משנה"
-      description="מעקב דלק, עבודות חיצוניות ודוח יתרה לתשלום/גבייה"
-    />
-  );
+  return <SubcontractorsPageClient />;
 }

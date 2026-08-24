@@ -3,11 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { getDefaultOrg } from "@/lib/org";
 import { parseDateRange } from "@/lib/dateRange";
 import { LedgerCategory, LedgerEntryType } from "@prisma/client";
-import { ApiAuthError, handleApiAuth, requireManager } from "@/lib/api-auth";
+import { ApiAuthError, handleApiAuth, requirePayrollAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireManager();
+    await requirePayrollAccess();
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type") || "all";
   const org = await getDefaultOrg();
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireManager();
+    await requirePayrollAccess();
     const org = await getDefaultOrg();
     const body = await req.json();
     const amount = Number(body.amount);

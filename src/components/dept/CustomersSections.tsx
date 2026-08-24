@@ -143,10 +143,29 @@ export function CustomersRegisterSection({
                 dir="ltr"
               />
               <input
-                placeholder="מושב / ישוב"
+                placeholder="טלפון נוסף"
+                value={form.phone2 || ""}
+                onChange={(e) => setForm({ ...form, phone2: e.target.value })}
+                className="field-input"
+                dir="ltr"
+              />
+              <input
+                placeholder="איש קשר"
+                value={form.contactPerson || ""}
+                onChange={(e) => setForm({ ...form, contactPerson: e.target.value })}
+                className="field-input"
+              />
+              <input
+                placeholder="כתובת"
+                value={form.address || ""}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                className="field-input"
+              />
+              <input
+                placeholder="מושב / ישוב ראשי"
                 value={form.moshavName}
                 onChange={(e) => setForm({ ...form, moshavName: e.target.value })}
-                className="field-input"
+                className="field-input sm:col-span-2"
               />
               <input
                 placeholder="הערות"
@@ -184,18 +203,43 @@ export function CustomersRegisterSection({
                 <dd dir="ltr">{viewing.phone || "—"}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-muted">מושב</dt>
+                <dt className="text-muted">טלפון נוסף</dt>
+                <dd dir="ltr">{viewing.phone2 || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">איש קשר</dt>
+                <dd>{viewing.contactPerson || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">כתובת</dt>
+                <dd>{viewing.address || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">ישוב ראשי</dt>
                 <dd>{viewing.moshav?.nameHe || viewing.moshav?.name || "—"}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">הערות</dt>
-                <dd>{viewing.notes || "—"}</dd>
+                <dd>{viewing.displayNotes || viewing.notes || "—"}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">סטטוס</dt>
                 <dd>{viewing.isActive ? "פעיל" : "מושבת"}</dd>
               </div>
             </dl>
+            {viewing.plots && viewing.plots.length > 0 && (
+              <div className="rounded-xl border p-3 space-y-2">
+                <p className="text-sm font-bold">חלקות לפי ישוב</p>
+                {viewing.plots.map((p) => (
+                  <div key={p.id} className="text-xs flex justify-between gap-2 border-b border-border/40 pb-1">
+                    <span>
+                      <span className="text-muted">{p.moshav?.nameHe || p.moshav?.name || "ללא ישוב"} · </span>
+                      <span className="font-bold">{p.nameHe || p.name}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
